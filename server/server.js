@@ -34,17 +34,31 @@ const mongoOptions = {
   retryWrites: true,
 };
 
-// Try to connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, mongoOptions)
-  .then(() => {
+// Try to connect to MongoDB with retry and improved logging
+mongoose.set('strictQuery', false);
+
+const connectWithRetry = async (attempt = 1) => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
     console.log("MongoDB connected successfully");
     isMongoConnected = true;
-  })
-  .catch(err => {
-    console.warn("MongoDB connection failed - running in demo mode without database");
-    console.warn("To enable database, check your MongoDB Atlas IP whitelist or connection string");
+  } catch (err) {
     isMongoConnected = false;
-  });
+    console.error(`MongoDB connection attempt #${attempt} failed:`);
+    console.error(err && err.message ? err.message : err);
+    if (err && err.stack) console.error(err.stack);
+    console.warn("Running in demo mode without database. Will retry connection in 30 seconds.");
+    // Retry with exponential backoff capped at 5 minutes
+    const delay = Math.min(30000 * attempt, 300000);
+    setTimeout(() => connectWithRetry(attempt + 1), delay);
+  }
+};
+
+if (process.env.MONGO_URI) {
+  connectWithRetry();
+} else {
+  console.warn('No MONGO_URI provided in environment; running in demo mode');
+}
 
 // In-memory fallback when MongoDB unavailable (dynamic, works without DB)
 const memoryStore = [];
