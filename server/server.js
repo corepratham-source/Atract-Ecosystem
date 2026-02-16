@@ -167,15 +167,17 @@ const clientBuildPath = path.join(__dirname, '../client/dist');
 app.use(express.static(clientBuildPath));
 
 // Fallback: serve index.html for all non-API routes (React Router support)
-app.get("*", (req, res) => {
-  if (req.path.startsWith("/api")) {
-    return res.status(404).json({ error: "API endpoint not found" });
-  }
+app.get(/^(?!\/api\/).+$/, (req, res) => {
   res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
     if (err) {
       res.status(404).send("ATRact Backend Running - Please build the frontend or access /api endpoints");
     }
   });
+});
+
+// API 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ error: "API endpoint not found" });
 });
 
 const PORT = process.env.PORT || 5000;
