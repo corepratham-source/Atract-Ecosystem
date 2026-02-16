@@ -2,6 +2,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const path = require("path");
 require("dotenv").config();
 
 const AppMetric = require("./models/appmetric");
@@ -161,8 +162,20 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-app.get("/", (req, res) => {
-  res.send("ATRact Backend Running - API available at /api/*");
+// Serve static files from the React build folder
+const clientBuildPath = path.join(__dirname, '../client/dist');
+app.use(express.static(clientBuildPath));
+
+// Fallback: serve index.html for all non-API routes (React Router support)
+app.get("*", (req, res) => {
+  if (req.path.startsWith("/api")) {
+    return res.status(404).json({ error: "API endpoint not found" });
+  }
+  res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
+    if (err) {
+      res.status(404).send("ATRact Backend Running - Please build the frontend or access /api endpoints");
+    }
+  });
 });
 
 const PORT = process.env.PORT || 5000;
