@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import LeftSidebar from "../components/LeftSidebar";
 import MonetizationCard from "../components/MonetizationCard";
 import SectionTitle from "../components/SectionTitle";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
@@ -25,6 +26,9 @@ const ads = [
 ];
 
 export default function ExitInterviewAnalyzer({ app }) {
+  // Track app usage
+  useTrackAppUsage('exit-interview');
+  
   const [currentAd, setCurrentAd] = useState(0);
   const [form, setForm] = useState({
     employeeName: "",

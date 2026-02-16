@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import SectionTitle from "../components/SectionTitle";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
@@ -13,6 +14,9 @@ const defaultApp = {
 };
 
 export default function InterviewQuestionGenerator({ app = defaultApp }) {
+  // Track app usage
+  useTrackAppUsage('interview-questions');
+  
   const [role, setRole] = useState("");
   const [level, setLevel] = useState("Mid");
   const [questions, setQuestions] = useState([]);

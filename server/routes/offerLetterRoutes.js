@@ -40,7 +40,7 @@ Today's date for reference: ${new Date().toLocaleDateString("en-IN", { day: "num
 async function generateWithGemini(form) {
   const { GoogleGenerativeAI } = require("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
 
   const result = await model.generateContent(buildPrompt(form));
   const response = await result.response;

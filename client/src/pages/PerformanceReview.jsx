@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import LeftSidebar from "../components/LeftSidebar";
 import MonetizationCard from "../components/MonetizationCard";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
 
@@ -23,6 +24,9 @@ const ads = [
 ];
 
 export default function PerformanceReviewAnalyzer({ app, isPro = false }) {
+  // Track app usage
+  useTrackAppUsage('performance-review');
+  
   const [currentAd, setCurrentAd] = useState(0);
   const [formData, setFormData] = useState({
     employeeName: "",

@@ -139,50 +139,173 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
   };
 
   const parseResumeContent = (content) => {
-    const lines = content.split('\n').filter(line => line.trim());
-    
+    // Normalize line endings and remove excessive whitespace
+    const normalized = content.replace(/\r\n?/g, "\n").replace(/\t/g, ' ').replace(/ +/g, ' ');
+    const rawLines = normalized.split('\n');
+    const lines = rawLines.map(l => l.trim()).filter(l => l !== '');
+
     let currentSection = '';
-    let expText = '';
-    let eduText = '';
-    let skillsText = '';
-    let achText = '';
-    
+    let expBlocks = [];
+    let curExp = [];
+    let eduBlocks = [];
+    let curEdu = [];
+    let skillsList = [];
+    let achBlocks = [];
+    let curAch = [];
+    let summaryLines = [];
+
+    // heuristics for name/contact
+    let possibleName = '';
+    let contactLine = '';
+    const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+    const phoneRegex = /\+?\d[\d\s\-()]{6,}\d/;
+
+    // choose first non-empty line as possible name if it looks like a name
+    for (let i = 0; i < rawLines.length && i < 6; i++) {
+      const l = rawLines[i].trim();
+      if (!l) continue;
+      if (emailRegex.test(l) || phoneRegex.test(l) || /linkedin|github|portfolio/i.test(l)) {
+        contactLine = contactLine ? contactLine + ' | ' + l : l;
+        continue;
+      }
+      // avoid lines that say 'resume' or are too long
+      if (/resume/i.test(l) || l.length > 60) continue;
+      if (!possibleName) possibleName = l;
+    }
+
+    // iterate lines and bucket into sections
     lines.forEach(line => {
-      const lower = line.toLowerCase().trim();
-      
-      // Identify sections
-      if (lower.includes('experience') || lower.includes('work history') || lower.includes('employment')) {
-        currentSection = 'experience';
-        return;
-      } else if (lower.includes('education') || lower.includes('degree') || lower.includes('university') || lower.includes('college')) {
-        currentSection = 'education';
-        return;
-      } else if (lower.includes('skill') || lower.includes('technolog') || lower.includes('tool') || lower.includes('expertise')) {
-        currentSection = 'skills';
-        return;
-      } else if (lower.includes('achievement') || lower.includes('project') || lower.includes('accomplishment') || lower.includes('award')) {
-        currentSection = 'achievements';
+      const lower = line.toLowerCase();
+
+      // detect contact info anywhere
+      if (emailRegex.test(line) || phoneRegex.test(line) || /linkedin\.com|github\.com|portfolio/i.test(line)) {
+        contactLine = contactLine ? contactLine + ' | ' + line : line;
         return;
       }
-      
-      // Add content to appropriate section
-      if (line.trim()) {
-        if (currentSection === 'experience') {
-          expText += line + '\n';
-        } else if (currentSection === 'education') {
-          eduText += line + '\n';
-        } else if (currentSection === 'skills') {
-          skillsText += line + ', ';
-        } else if (currentSection === 'achievements') {
-          achText += line + '\n';
+
+      // detect section headers (explicit keywords or ALL CAPS headings)
+      const isAllCaps = /^[A-Z0-9\s\-:\.]+$/.test(line) && line.replace(/[^A-Z0-9]/g, '').length >= 3;
+      if (isAllCaps || /^(summary|professional summary|experience|work experience|employment history|education|skills|technical skills|projects|achievements|certifications|awards|contact)/i.test(lower)) {
+        // finalize previous blocks if switching sections
+        if (currentSection === 'experience' && curExp.length) { expBlocks.push(curExp.join(' ')); curExp = []; }
+        if (currentSection === 'education' && curEdu.length) { eduBlocks.push(curEdu.join(' ')); curEdu = []; }
+        if (currentSection === 'achievements' && curAch.length) { achBlocks.push(curAch.join(' ')); curAch = []; }
+
+        if (/experience|work experience|employment/i.test(lower) || /professional experience/i.test(line)) {
+          currentSection = 'experience';
+        } else if (/education|degree|university|college/i.test(lower)) {
+          currentSection = 'education';
+        } else if (/skill|technolog|tool|expertise/i.test(lower)) {
+          currentSection = 'skills';
+        } else if (/achievement|project|accomplish|award/i.test(lower)) {
+          currentSection = 'achievements';
+        } else if (/summary|professional summary/i.test(lower)) {
+          currentSection = 'summary';
+        } else if (/contact/i.test(lower)) {
+          currentSection = 'contact';
+        } else {
+          // fallback: set to summary
+          currentSection = 'summary';
+        }
+        return;
+      }
+
+      // bucket lines
+      if (currentSection === 'experience') {
+        // treat blank-line separated paragraphs as separate experience items
+        if (line === '') {
+          if (curExp.length) { expBlocks.push(curExp.join(' ')); curExp = []; }
+        } else {
+          curExp.push(line);
+        }
+      } else if (currentSection === 'education') {
+        if (line === '') { if (curEdu.length) { eduBlocks.push(curEdu.join(' ')); curEdu = []; } }
+        else curEdu.push(line);
+      } else if (currentSection === 'skills') {
+        // split common separators
+        const parts = line.split(/[,•·\-|]/).map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          // further split by slash or / or and
+          p.split(/\//).map(x => x.trim()).forEach(q => { if (q) skillsList.push(q); });
+        });
+      } else if (currentSection === 'achievements') {
+        if (line === '') { if (curAch.length) { achBlocks.push(curAch.join(' ')); curAch = []; } }
+        else curAch.push(line);
+      } else if (currentSection === 'summary') {
+        summaryLines.push(line);
+      } else {
+        // no current section - try to infer: lines with 'at' and years -> experience, lines with degree keywords -> education
+        if (/\b(at|@)\b/i.test(line) && /\b(\d{4}|\d{2})\b/.test(line)) {
+          curExp.push(line);
+          currentSection = 'experience';
+        } else if (/degree|b\.sc|m\.sc|bachelor|master|university|college|graduat/i.test(line)) {
+          curEdu.push(line);
+          currentSection = 'education';
+        } else if (/skill|java(script)?|react|node|python|aws|docker|kubernetes|sql|nosql/i.test(line) && line.length < 120) {
+          const parts = line.split(/[,•·\-|]/).map(s => s.trim()).filter(Boolean);
+          parts.forEach(p => p.split(/\//).map(x => x.trim()).forEach(q => { if (q) skillsList.push(q); }));
+          currentSection = 'skills';
+        } else {
+          summaryLines.push(line);
         }
       }
     });
-    
+
+    // finalize any running buffers
+    if (curExp.length) expBlocks.push(curExp.join(' '));
+    if (curEdu.length) eduBlocks.push(curEdu.join(' '));
+    if (curAch.length) achBlocks.push(curAch.join(' '));
+
+    // Compose cleaned strings
+    const expText = expBlocks.join('\n\n');
+    const eduText = eduBlocks.join('\n');
+    const skillsText = Array.from(new Set(skillsList.map(s => s.replace(/^\-+|\.+$/g, '').trim()))).join(', ');
+    const achText = achBlocks.join('\n');
+    const summaryText = summaryLines.join(' ');
+
     if (expText) setExperience(expText.trim());
     if (eduText) setEducation(eduText.trim());
-    if (skillsText) setSkills(skillsText.replace(/,\s*$/, '').trim());
+    if (skillsText) setSkills(skillsText.trim());
     if (achText) setAchievements(achText.trim());
+
+    // Do NOT auto-show results on upload. Populate fields only.
+    // Save parsed contact/name into local state if useful
+    if (possibleName) {
+      // don't overwrite targetRole (job title), but keep as metadata in `uploadedFileName` if empty
+      if (!uploadedFileName) setUploadedFileName(possibleName);
+    }
+    // store contact info in achievements area if no explicit contact UI (optional)
+    if (contactLine && !achText) {
+      // do nothing for now; keep contact in parsed data only
+    }
+  };
+
+  // Build a formatted resume string from current form fields (used when user clicks Generate)
+  const buildLocalFormattedResume = () => {
+    const headerParts = [];
+    if (uploadedFileName) headerParts.push(uploadedFileName);
+    if (targetRole) headerParts.push(targetRole);
+    if (targetCompany) headerParts.push(targetCompany);
+
+    const header = headerParts.join(' | ');
+    let out = '';
+    if (header) out += header + '\n' + '='.repeat(Math.min(80, header.length)) + '\n\n';
+
+    if (experience) {
+      out += 'WORK EXPERIENCE\n' + experience.trim() + '\n\n';
+    }
+    if (education) {
+      out += 'EDUCATION\n' + education.trim() + '\n\n';
+    }
+    if (skills) {
+      out += 'KEY SKILLS\n' + skills.trim() + '\n\n';
+    }
+    if (achievements) {
+      out += 'ACHIEVEMENTS\n' + achievements.trim() + '\n\n';
+    }
+
+    out += 'Generated by ATRact Resume Formatter | ATS-Optimized';
+    return out.trim();
   };
 
   const generateATSResumeWithAI = async () => {
@@ -199,6 +322,13 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
 
     setIsProcessing(true);
     setError("");
+
+    // Immediately build a local formatted resume from parsed/entered fields
+    const localPreview = buildLocalFormattedResume();
+    if (localPreview) {
+      setFormattedResume(localPreview);
+      setActiveTab('results');
+    }
 
     try {
       const response = await fetch(`${API_BASE}/api/resume-formatter/generate-ai`, {
@@ -846,9 +976,9 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
                 </div>
 
                 {/* A4 Resume Preview - Vertical Scroll Only */}
-                <div className="bg-gray-200 rounded-xl p-2 lg:p-4 overflow-y-auto overflow-x-hidden max-h-[calc(100vh-280px)] lg:max-h-[calc(100vh-300px)] border border-gray-300">
+                <div className="bg-gray-200 rounded-xl p-2 lg:p-4 overflow-x-hidden max-h-[calc(150vh-100px)] lg:max-h-[calc(150vh-100px)] border border-gray-300">
                   {!formattedResume ? (
-                    <div className="flex flex-col items-center justify-center text-gray-400" style={{ width: '100%', minHeight: '297mm', background: 'white' }}>
+                    <div className="flex flex-col items-center justify-center text-gray-400" style={{ width: '100%', minHeight: '1100px', background: 'white' }}>
                       <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 mt-8 lg:mt-32">
                         <svg className="w-6 h-6 lg:w-8 lg:h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -858,7 +988,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
                       <p className="text-xs lg:text-sm text-center px-4">Fill in your details and click "Generate" to create your ATS-optimized resume</p>
                     </div>
                   ) : (
-                    <div className="mx-auto shadow-lg bg-white" style={{ width: '100%', maxWidth: '210mm', minHeight: '297mm' }}>
+                    <div className="mx-auto shadow-lg bg-white" style={{ width: '100%', maxWidth: '800px', minHeight: '1100px' }}>
                       {/* Resume Header */}
                       <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 lg:px-8 py-4 lg:py-6 text-white">
                         <h1 className="text-lg lg:text-2xl font-bold font-serif tracking-wide">{targetRole || "Professional Resume"}</h1>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
 import mammoth from "mammoth";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
@@ -13,6 +14,9 @@ const defaultApp = {
 };
 
 export default function ResumeScreenerLite({ app = defaultApp }) {
+  // Track app usage
+  useTrackAppUsage('resume-screener');
+  
   const [jd, setJd] = useState("");
   const [resumeText, setResumeText] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);

@@ -59,7 +59,7 @@ export default function Dashboard({ isPro = false }) {
           timeout: FETCH_TIMEOUT_MS,
         });
         clearTimeout(timeoutId);
-        setApps(Array.isArray(res.data) ? res.data : getFallbackApps());
+        setApps(Array.isArray(res.data) && res.data.length > 0 ? res.data : getFallbackApps());
         setFetchError(null);
       } catch (err) {
         clearTimeout(timeoutId);
@@ -107,10 +107,39 @@ export default function Dashboard({ isPro = false }) {
     }
   };
 
+  // Get growing apps (users > 0)
+  const growingApps = apps.filter(a => (a.users7d || 0) > 0 || (a.users30d || 0) > 0);
+  // Get declining apps (users = 0)
+  const decliningApps = apps.filter(a => (a.users7d || 0) === 0 && (a.users30d || 0) === 0);
+
+  // Track app usage and move from declining to growing
+  const trackAppUsage = async (appId) => {
+    try {
+      const app = apps.find(a => a._id === appId);
+      if (!app) return;
+
+      // Increment users7d by 1 to mark as "in use"
+      const updatedApp = {
+        ...app,
+        users7d: (app.users7d || 0) + 1,
+        users30d: (app.users30d || 0) + 1,
+        status: "Live"
+      };
+
+      // Optimistic UI update
+      setApps(prevApps => prevApps.map(a => a._id === appId ? updatedApp : a));
+
+      // Update backend
+      await axios.put(`${API_BASE}/apps/${appId}`, updatedApp);
+    } catch (err) {
+      console.error("Failed to track app usage:", err);
+    }
+  };
+
   return (
     <div className="flex min-h-screen bg-gray-100">
       <LeftSidebar app={dashboardApp} isPro={isPro} isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="flex-1 lg:ml-80 min-w-0 p-4 sm:p-6 overflow-x-hidden">
+      <div className="flex-1 lg:ml-80 min-w-0 p-4 sm:p-6">
         <div className="max-w-6xl mx-auto">
           {/* Mobile menu button */}
           <button
@@ -262,96 +291,72 @@ export default function Dashboard({ isPro = false }) {
           {/* SECTION A: Ecosystem Snapshot (Top Strip) */}
           <Snapshot apps={apps} />
 
-          {/* SECTION C: App Performance Breakdown */}
+          {/* SECTION C: App Performance Breakdown - With user counts */}
           <div className="mt-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">App Performance Breakdown</h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Growing Apps */}
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-                <h3 className="text-md font-medium text-emerald-700 mb-3">Growing Apps (Weekly users {">"} 20% of Monthly)</h3>
-                {apps.filter(a => (a.users7d || 0) > (a.users30d || 0) * 0.2).length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-2 px-2">App Name</th>
-                          <th className="text-left py-2 px-2">Status</th>
-                          <th className="text-left py-2 px-2">Users (7d)</th>
-                          <th className="text-left py-2 px-2">Users (30d)</th>
-                          <th className="text-left py-2 px-2">Revenue (30d)</th>
-                          <th className="text-left py-2 px-2">Retention</th>
-                          <th className="text-left py-2 px-2">Cost</th>
-                          <th className="text-left py-2 px-2">Owner</th>
-                          <th className="text-left py-2 px-2">Decision</th>
+            <div className="flex flex-nowrap gap-6 overflow-x-auto pb-4">
+              {/* Growing Apps - Users > 0 */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 min-w-[320px]">
+                <h3 className="text-md font-medium text-emerald-700 mb-3 flex items-center gap-2">
+                  📈 Growing Apps
+                  <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-xs font-semibold ml-auto">{growingApps.length}</span>
+                </h3>
+                {growingApps.length > 0 ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="py-2 px-2 text-left text-xs font-semibold text-slate-500">App</th>
+                        <th className="py-2 px-2 text-right text-xs font-semibold text-slate-500">Users</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {growingApps.map((app) => (
+                        <tr key={app._id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-2 px-2 font-medium text-slate-900">{app.appName}</td>
+                          <td className="py-2 px-2 text-right text-emerald-600 font-semibold">{((app.users7d || 0) + (app.users30d || 0)).toLocaleString()}</td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {apps.filter(a => (a.users7d || 0) > (a.users30d || 0) * 0.2).map((app) => (
-                          <tr key={app._id} className="border-b border-slate-100">
-                            <td className="py-2 px-2 font-medium">{app.appName}</td>
-                            <td className="py-2 px-2">{app.status}</td>
-                            <td className="py-2 px-2">{app.users7d || 0}</td>
-                            <td className="py-2 px-2">{app.users30d || 0}</td>
-                            <td className="py-2 px-2">₹{(app.revenue30d || 0).toLocaleString()}</td>
-                            <td className="py-2 px-2">{app.retention || 0}%</td>
-                            <td className="py-2 px-2">₹{(app.cost || 0).toLocaleString()}</td>
-                            <td className="py-2 px-2">{app.owner || ''}</td>
-                            <td className="py-2 px-2">{app.decision}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
-                  <p className="text-slate-500 text-sm">No growing apps at the moment.</p>
+                  <p className="text-slate-500 text-sm italic">No growing apps yet. Open an app to get started!</p>
                 )}
               </div>
 
-              {/* Declining Apps */}
-              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
-                <h3 className="text-md font-medium text-rose-700 mb-3">Declining Apps (Weekly users {"<"} 10)</h3>
-                {apps.filter(a => (a.users7d || 0) < 10).length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200">
-                          <th className="text-left py-2 px-2">App Name</th>
-                          <th className="text-left py-2 px-2">Status</th>
-                          <th className="text-left py-2 px-2">Users (7d)</th>
-                          <th className="text-left py-2 px-2">Users (30d)</th>
-                          <th className="text-left py-2 px-2">Revenue (30d)</th>
-                          <th className="text-left py-2 px-2">Retention</th>
-                          <th className="text-left py-2 px-2">Cost</th>
-                          <th className="text-left py-2 px-2">Owner</th>
-                          <th className="text-left py-2 px-2">Decision</th>
+              {/* Declining Apps - Users = 0 */}
+              <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 min-w-[320px]">
+                <h3 className="text-md font-medium text-rose-700 mb-3 flex items-center gap-2">
+                  📉 Declining Apps
+                  <span className="bg-rose-100 text-rose-800 px-2 py-0.5 rounded text-xs font-semibold ml-auto">{decliningApps.length}</span>
+                </h3>
+                {decliningApps.length > 0 ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200">
+                        <th className="py-2 px-2 text-left text-xs font-semibold text-slate-500">App</th>
+                        <th className="py-2 px-2 text-right text-xs font-semibold text-slate-500">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {decliningApps.map((app) => (
+                        <tr key={app._id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-2 px-2 font-medium text-slate-900">{app.appName}</td>
+                          <td className="py-2 px-2 text-right">
+                            <span className="bg-slate-100 text-slate-700 px-2 py-0.5 rounded text-xs font-semibold">0 users</span>
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {apps.filter(a => (a.users7d || 0) < 10).map((app) => (
-                          <tr key={app._id} className="border-b border-slate-100">
-                            <td className="py-2 px-2 font-medium">{app.appName}</td>
-                            <td className="py-2 px-2">{app.status}</td>
-                            <td className="py-2 px-2">{app.users7d || 0}</td>
-                            <td className="py-2 px-2">{app.users30d || 0}</td>
-                            <td className="py-2 px-2">₹{(app.revenue30d || 0).toLocaleString()}</td>
-                            <td className="py-2 px-2">{app.retention || 0}%</td>
-                            <td className="py-2 px-2">₹{(app.cost || 0).toLocaleString()}</td>
-                            <td className="py-2 px-2">{app.owner || ''}</td>
-                            <td className="py-2 px-2">{app.decision}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      ))}
+                    </tbody>
+                  </table>
                 ) : (
-                  <p className="text-slate-500 text-sm">No declining apps at the moment.</p>
+                  <p className="text-slate-500 text-sm italic">No declining apps. Keep it up!</p>
                 )}
               </div>
             </div>
           </div>
 
           {/* SECTION B: App Portfolio Table (Main Section) */}
-          <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200">
+          <div className="mt-4 rounded-2xl border border-slate-200">
             <AppTable apps={apps} setApps={setApps} />
           </div>
         </div>

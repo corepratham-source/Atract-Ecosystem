@@ -9,18 +9,32 @@ export default function AppTable({ apps, setApps }) {
   const [editingField, setEditingField] = useState(null);
 
   const handleUpdate = async (id, field, value) => {
+    // Optimistic update - use setState updater function to ensure latest state
+    setApps(prevApps => {
+      const newApps = [...prevApps];
+      const appIndex = newApps.findIndex(a => a._id === id);
+      if (appIndex !== -1) {
+        newApps[appIndex] = { ...newApps[appIndex], [field]: value };
+      }
+      return newApps;
+    });
+
+    // Send to backend
     try {
       const app = apps.find(a => a._id === id);
-      const updated = await axios.put(`${API_URL}/${id}`, {
-        ...app,
-        [field]: value,
-        lastUpdated: new Date()
-      });
-      setApps(apps.map(a => a._id === id ? updated.data : a));
+      if (app) {
+        await axios.put(`${API_URL}/${id}`, {
+          ...app,
+          [field]: value,
+          lastUpdated: new Date()
+        });
+      }
       setEditingId(null);
       setEditingField(null);
     } catch (err) {
       console.error("Update failed:", err);
+      // Revert on failure
+      setApps(prevApps => prevApps.map(a => a._id === id ? apps.find(x => x._id === id) : a));
     }
   };
 
@@ -109,19 +123,19 @@ export default function AppTable({ apps, setApps }) {
       </div>
 
       {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="min-w-full">
-          <thead className="bg-slate-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">App Name</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Status</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Users (7d)</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Users (30d)</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Revenue (30d)</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Retention %</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Cost / Month</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Owner</th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide border-b border-slate-200">Decision</th>
+      <div className="hidden md:block overflow-y-auto overflow-x-hidden max-h-[500px] w-full">
+        <table className="w-full text-sm border-collapse">
+          <thead className="bg-slate-50 sticky top-0">
+            <tr className="">
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-32">App</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-16">Status</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-16">7d</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-16">30d</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-20">Rev</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-14">Ret</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-16">Cost</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-20">Owner</th>
+              <th className="px-2 py-2 text-left text-xs font-semibold text-slate-500 uppercase w-16">Decision</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-200">
@@ -132,9 +146,9 @@ export default function AppTable({ apps, setApps }) {
               
               return (
                 <tr key={app._id} className={rowClass}>
-                  <td className="px-4 py-3 text-sm">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                  <td className="px-2 py-3 text-sm w-40">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 truncate">
                         {isEditing(app._id, "appName") ? (
                           <input
                             type="text"
@@ -155,7 +169,7 @@ export default function AppTable({ apps, setApps }) {
                               setEditingId(app._id);
                               setEditingField("appName");
                             }}
-                            className="text-left font-medium text-slate-900 hover:bg-slate-50 px-2 py-1 rounded-lg truncate max-w-[22rem]"
+                            className="text-left font-medium text-slate-900 hover:bg-slate-50 px-2 py-1 rounded-lg truncate w-full"
                             title={app.appName || "Untitled"}
                           >
                             {app.appName || "Untitled"}
@@ -180,18 +194,18 @@ export default function AppTable({ apps, setApps }) {
                       <button
                         type="button"
                         onClick={() => handleDelete(app._id)}
-                        className="text-xs font-medium text-rose-700 hover:text-rose-800 hover:bg-rose-50 px-2 py-1 rounded-lg"
+                        className="text-xs font-medium text-rose-700 hover:text-rose-800 hover:bg-rose-50 px-2 py-1 rounded-lg shrink-0"
                         title="Delete app"
                       >
                         Delete
                       </button>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-2 py-3 text-sm w-20">
                     <select
                       value={app.status || "Build"}
                       onChange={(e) => handleUpdate(app._id, "status", e.target.value)}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold ${getStatusBadge(app.status || "Build")} border-0 cursor-pointer`}
+                      className={`px-1 py-1 rounded-lg text-xs font-semibold w-full ${getStatusBadge(app.status || "Build")} border-0 cursor-pointer`}
                     >
                       <option value="Build">🛠 Build</option>
                       <option value="Live">🚀 Live</option>

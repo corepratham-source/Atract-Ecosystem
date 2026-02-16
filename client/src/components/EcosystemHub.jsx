@@ -1,10 +1,25 @@
 import { microApps } from "../data/microApps";
 import { useNavigate } from "react-router-dom";
 
-export default function EcosystemHub({ onNavigateToDashboard }) {
+export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
   const navigate = useNavigate();
 
   const handleOpenApp = (appId) => {
+    // Track app usage in localStorage for dashboard to sync
+    if (onAppUsed) {
+      onAppUsed(appId);
+    } else {
+      // Fallback: store in localStorage if no callback passed
+      try {
+        const recentApps = JSON.parse(localStorage.getItem('recentApps') || '[]');
+        if (!recentApps.includes(appId)) {
+          recentApps.push(appId);
+        }
+        localStorage.setItem('recentApps', JSON.stringify(recentApps));
+      } catch (err) {
+        console.error('Error storing recent apps:', err);
+      }
+    }
     navigate(`/apps/${appId}`);
   };
 

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
 import LeftSidebar from "../components/LeftSidebar";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
@@ -13,6 +14,9 @@ const defaultApp = {
 };
 
 export default function OfferLetterGenerator({ app = defaultApp }) {
+  // Track app usage
+  useTrackAppUsage('offer-letter');
+  
   const [form, setForm] = useState({
     company: "",
     candidate: "",
