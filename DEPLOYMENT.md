@@ -41,23 +41,47 @@ In Render dashboard, set these environment variables:
 ### Step 2: Repository Setup
 
 The deployment is configured to:
-1. Build the React frontend
+1. Build the React frontend (`client/dist/`)
 2. Serve it from Express server
 3. Proxy `/api/*` requests to backend routes
 
 ### Step 3: Deploy
 
-Option A - Direct GitHub Integration:
-1. Push code to GitHub
-2. Connect your repo to Render
-3. Render will automatically:
-   - Run `build` script in root package.json
-   - Compile React frontend to `server/../client/dist`
-   - Start the server with `npm start` in server folder
+**Option A - Using render.yaml (RECOMMENDED):**
+1. Ensure `render.yaml` is in the root of your repository
+2. In Render dashboard, connect your GitHub repo
+3. Render will automatically read `render.yaml` and use the correct build/start commands
+4. Build Command: `npm install && cd client && npm install && npm run build && cd ../server && npm install`
+5. Start Command: `cd server && npm start`
 
-Option B - Manual Setup (if using render.yaml):
-- The `render.yaml` contains full deployment config
-- Render will read this for build/start commands
+**Option B - Manual Setup in Render UI:**
+1. Create new Web Service in Render
+2. Connect your GitHub repo
+3. In the "Build Command" field, enter:
+   ```
+   npm install && cd client && npm install && npm run build && cd ../server && npm install
+   ```
+4. In the "Start Command" field, enter:
+   ```
+   cd server && npm start
+   ```
+5. Add all environment variables
+6. Deploy
+
+**Option C - If using auto-detection:**
+1. Render will read the root `package.json`
+2. It will run the `build` script which handles everything
+3. Then runs `npm start` which starts the server
+
+### After Deployment
+
+The deployment will:
+1. ✅ Install root dependencies
+2. ✅ Install and build React frontend
+3. ✅ Install server dependencies  
+4. ✅ Start Express server on port 5000
+5. ✅ Serve frontend from `client/dist/`
+6. ✅ Expose all API endpoints under `/api/*`
 
 ## How It Works
 

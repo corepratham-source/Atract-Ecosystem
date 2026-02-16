@@ -4,7 +4,8 @@
   "description": "ATRact Dashboard - Micro-apps Ecosystem",
   "type": "commonjs",
   "scripts": {
-    "build": "cd client && npm install && npm run build",
+    "build": "npm install && cd client && npm install && npm run build && cd ../server && npm install",
+    "postinstall": "cd client && npm install && npm run build 2>/dev/null || true",
     "install-all": "npm install && cd client && npm install && cd ../server && npm install",
     "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
     "start": "cd server && npm start"
@@ -16,3 +17,4 @@
     "node": ">=20.0.0"
   }
 }
+

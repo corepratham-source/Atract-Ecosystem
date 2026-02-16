@@ -3,7 +3,7 @@ services:
     name: attract-backend
     env: node
     plan: free
-    buildCommand: cd server && npm install && npm run build
+    buildCommand: npm install && cd client && npm install && npm run build && cd ../server && npm install
     startCommand: cd server && npm start
     envVars:
       - key: MONGO_URI
