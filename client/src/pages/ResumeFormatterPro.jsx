@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import LeftSidebar from "../components/LeftSidebar";
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
 import MonetizationCard from "../components/MonetizationCard";
 import mammoth from "mammoth";
 import { API_BASE } from "../config/api";
@@ -24,6 +24,7 @@ const ads = [
 
 export default function ResumeFormatterPro({ app, isPro = false }) {
   const [currentAd, setCurrentAd] = useState(0);
+  const [isPaid, setIsPaid] = useState(() => sessionStorage.getItem("resumeFormatterPaid") === "true");
   const [targetRole, setTargetRole] = useState("");
   const [targetCompany, setTargetCompany] = useState("");
   const [industry, setIndustry] = useState("");
@@ -184,7 +185,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
       }
 
       // detect section headers (explicit keywords or ALL CAPS headings)
-      const isAllCaps = /^[A-Z0-9\s\-:\.]+$/.test(line) && line.replace(/[^A-Z0-9]/g, '').length >= 3;
+      const isAllCaps = /^[A-Z0-9\s.:_-]+$/.test(line) && line.replace(/[^A-Z0-9]/g, '').length >= 3;
       if (isAllCaps || /^(summary|professional summary|experience|work experience|employment history|education|skills|technical skills|projects|achievements|certifications|awards|contact)/i.test(lower)) {
         // finalize previous blocks if switching sections
         if (currentSection === 'experience' && curExp.length) { expBlocks.push(curExp.join(' ')); curExp = []; }
@@ -259,7 +260,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
     // Compose cleaned strings
     const expText = expBlocks.join('\n\n');
     const eduText = eduBlocks.join('\n');
-    const skillsText = Array.from(new Set(skillsList.map(s => s.replace(/^\-+|\.+$/g, '').trim()))).join(', ');
+    const skillsText = Array.from(new Set(skillsList.map(s => s.replace(/^-+|\.+$/g, '').trim()))).join(', ');
     const achText = achBlocks.join('\n');
     const summaryText = summaryLines.join(' ');
 
@@ -386,10 +387,12 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
 
       if (!res.ok || data.error) {
         if (data.error?.includes("not configured")) {
-          alert("Payment not configured. For demo: generating resume.");
+          alert("Payment not configured. For demo: marking as paid.");
+          setIsPaid(true);
+          sessionStorage.setItem("resumeFormatterPaid", "true");
           setShowPayment(false);
           if (plan === 'pro') {
-            window.location.href = '/upgrade-success';
+            setGeneratedCount(0);
           } else {
             generateATSResumeWithAI();
           }
@@ -428,6 +431,8 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
             });
             const verifyData = await verifyRes.json();
             if (verifyData.success) {
+              setIsPaid(true);
+              sessionStorage.setItem("resumeFormatterPaid", "true");
               setShowPayment(false);
               if (plan === 'single') {
                 generateATSResumeWithAI();
@@ -527,19 +532,8 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Left Sidebar */}
-      <LeftSidebar 
-        app={app} 
-        isPro={isPro}
-        ads={ads}
-        currentAd={currentAd}
-        onUpgrade={() => setShowPayment(true)}
-        onAdChange={setCurrentAd}
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 ml-0 lg:ml-80 p-4 lg:p-6">
+    <CustomerMicroAppShell app={app}>
+      <div className="max-w-5xl mx-auto w-full">
         {/* Payment Modal */}
         {showPayment && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
@@ -624,7 +618,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
         )}
 
         {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-gray-100 pb-3 lg:pb-4 -mx-4 lg:-mx-6 px-4 lg:px-6 pt-2">
+        <div className="sticky top-0 z-10 bg-gray-100 pb-3 lg:pb-4 pt-2">
           <h1 className="text-xl lg:text-3xl font-bold text-gray-900">{app?.name || "Resume Formatter Pro"}</h1>
           <p className="text-gray-600 text-sm lg:mt-1 hidden sm:block">{app?.valueProposition || "AI-Powered ATS-Optimized Resume Formatting"}</p>
         </div>
@@ -871,7 +865,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
               <MonetizationCard app={app} />
               
               {/* Quick Stats */}
-              <div className="bg-white rounded-2xl shadow-sm p-4">
+              <div className="bg-white rounded-2xl shadow-sm p-2">
                 <h3 className="font-semibold text-gray-900 mb-3">Quick Info</h3>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="bg-gray-50 rounded-xl p-3 text-center">
@@ -1156,6 +1150,6 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
           </div>
         )}
       </div>
-    </div>
+    </CustomerMicroAppShell>
   );
 }

@@ -7,8 +7,14 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:5000',
+        target: 'http://127.0.0.1:5000',
         changeOrigin: true,
+        secure: false,
+        configure: (proxy) => {
+          proxy.on('error', (err, req, res) => {
+            console.warn('[Vite proxy] Backend not reachable at 127.0.0.1:5000 – is the server running?', err.message);
+          });
+        },
       },
     },
   },

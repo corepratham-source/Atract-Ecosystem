@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import LeftSidebar from "../components/LeftSidebar";
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
 import MonetizationCard from "../components/MonetizationCard";
 import SectionTitle from "../components/SectionTitle";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
@@ -225,38 +225,13 @@ export default function ExitInterviewAnalyzer({ app }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Left Sidebar */}
-      <LeftSidebar 
-        app={app} 
-        isPro={isPaid}
-        ads={ads}
-        currentAd={currentAd}
-        onUpgrade={() => setShowPayment(true)}
-        onAdChange={setCurrentAd}
-      />
+    <CustomerMicroAppShell app={app}>
+      {/* Header moved to navbar (CustomerMicroAppShell) */}
 
-      {/* Main Content */}
-      <div className="flex-1 ml-80">
-        {/* Fixed Header */}
-        <div className="sticky top-0 z-10 bg-gray-100 border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between max-w-6xl mx-auto">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">{app?.name || "Exit Interview Analyzer"}</h1>
-              <p className="text-gray-600 text-sm">{app?.valueProposition || "Analyze exit feedback patterns to improve retention"}</p>
-            </div>
-            {!isPaid && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-                <span className="text-sm text-amber-700 font-medium">Free Trials: {trialCount}/{MAX_FREE_TRIALS}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Scrollable Content */}
-        <div className="p-6 max-w-6xl mx-auto">
-          {/* Payment Modal */}
-          {showPayment && (
+      {/* Scrollable Content */}
+      <div className="p-6 max-w-6xl mx-auto">
+        {/* Payment Modal */}
+        {showPayment && (
             <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
               <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
                 <button
@@ -448,7 +423,7 @@ export default function ExitInterviewAnalyzer({ app }) {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Analyzing with Gemini...
+                        Analyzing with Groq...
                       </span>
                     ) : (
                       "Analyze Exit Interview"
@@ -635,7 +610,6 @@ ${analysis.actions.map(a => `[${a.priority}] ${a.action} (${a.timeline})`).join(
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </CustomerMicroAppShell>
   );
 }

@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
-// Dynamic offer letter generation using LLM (Gemini)
+// Dynamic offer letter generation using LLM (Groq)
 
 const buildPrompt = (form) => {
   return `You are an expert HR professional. Generate a professional, formal offer letter using ONLY the following details.
@@ -36,15 +37,9 @@ Requirements:
 Today's date for reference: ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`;
 };
 
-// Gemini integration
-async function generateWithGemini(form) {
-  const { GoogleGenerativeAI } = require("@google/generative-ai");
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
-
-  const result = await model.generateContent(buildPrompt(form));
-  const response = await result.response;
-  return (response.text() || "").trim();
+async function generateWithGroq(form) {
+  const text = await completeWithGroq(buildPrompt(form));
+  return text || "";
 }
 
 function fallbackLetter(form) {
@@ -121,14 +116,11 @@ router.post("/generate", async (req, res) => {
 
     let letter = "";
 
-    // Use Gemini API if key is available
-    if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) {
-      try {
-        letter = await generateWithGemini(form);
-      } catch (apiError) {
-        console.log("Gemini API error, using fallback:", apiError.message);
-        letter = "";
-      }
+    try {
+      letter = await generateWithGroq(form) || "";
+    } catch (apiError) {
+      console.log("Groq API error, using fallback:", apiError.message);
+      letter = "";
     }
 
     // Fallback if no API or API failed

@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
-// Gemini LLM-based interview question generation
+// Groq LLM-based interview question generation
 
 const buildPrompt = (role, level) => {
   return `You are an expert interview coach. Generate 6-8 interview questions for a ${level} level ${role} position.
@@ -16,16 +17,10 @@ Return ONLY a valid JSON array of strings. No markdown, no extra text. Example f
 ["Question 1?", "Question 2?", "Question 3?"]`;
 };
 
-// Gemini integration
-async function generateWithGemini(role, level) {
-  const { GoogleGenerativeAI } = require("@google/generative-ai");
-  const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-  const model = genAI.getGenerativeModel({ model: process.env.GEMINI_MODEL || "gemini-2.0-flash" });
-
-  const result = await model.generateContent(buildPrompt(role, level));
-  const response = await result.response;
-  const text = (response.text() || "[]").trim();
-  return parseQuestions(text);
+async function generateWithGroq(role, level) {
+  const text = await completeWithGroq(buildPrompt(role, level));
+  const raw = (text || "[]").trim();
+  return parseQuestions(raw);
 }
 
 function parseQuestions(text) {
@@ -54,7 +49,7 @@ function fallbackParse(text) {
 
 router.post("/generate-questions", async (req, res) => {
   try {
-    const { role, level = "Mid", model = "gemini" } = req.body;
+    const { role, level = "Mid", model: _model = "groq" } = req.body;
 
     if (!role || typeof role !== "string") {
       return res.status(400).json({ error: "Role is required" });
@@ -70,13 +65,11 @@ router.post("/generate-questions", async (req, res) => {
 
     let questions = [];
 
-    if (process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.includes("your_")) {
-      try {
-        questions = await generateWithGemini(trimmedRole, levelVal);
-      } catch (apiError) {
-        console.log("Gemini API error, using fallback:", apiError.message);
-        questions = [];
-      }
+    try {
+      questions = await generateWithGroq(trimmedRole, levelVal) || [];
+    } catch (apiError) {
+      console.log("Groq API error, using fallback:", apiError.message);
+      questions = [];
     }
 
     // Fallback: generic questions when no API key or API fails
@@ -103,7 +96,7 @@ router.post("/generate-questions", async (req, res) => {
       questions,
       role: trimmedRole,
       level: levelVal,
-      model: "gemini",
+      model: "groq",
     });
   } catch (err) {
     console.error("Interview question generation error:", err);

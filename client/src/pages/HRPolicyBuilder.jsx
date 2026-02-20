@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import LeftSidebar from "../components/LeftSidebar";
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
@@ -230,24 +230,21 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
   const selectedPolicy = policyTypes.find(p => p.id === form.policyType);
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <LeftSidebar app={app} isPro={isPaid} />
-
-      <div className="flex-1 ml-80 h-screen flex flex-col">
-        {/* Fixed Header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">HR Policy Builder</h1>
-              <p className="text-sm text-gray-500">Professional HR policies auto-drafted with legal compliance</p>
-            </div>
-            {!isPaid && (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
-                <span className="text-sm text-amber-700 font-medium">Free Trials: {trialCount}/{MAX_FREE_TRIALS}</span>
-              </div>
-            )}
+    <CustomerMicroAppShell app={app}>
+      {/* Fixed Header */}
+      <div className="bg-white border-b border-gray-200 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">HR Policy Builder</h1>
+            <p className="text-sm text-gray-500">Professional HR policies auto-drafted with legal compliance</p>
           </div>
+          {!isPaid && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2">
+              <span className="text-sm text-amber-700 font-medium">Free Trials: {trialCount}/{MAX_FREE_TRIALS}</span>
+            </div>
+          )}
         </div>
+      </div>
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto">
@@ -417,7 +414,7 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Generating with Gemini...
+                        Generating with Groq...
                       </span>
                     ) : (
                       "Generate Policy Document"
@@ -480,7 +477,6 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Payment Modal */}
       {paymentModal && (
@@ -535,6 +531,6 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
           </div>
         </div>
       )}
-    </div>
+    </CustomerMicroAppShell>
   );
 }

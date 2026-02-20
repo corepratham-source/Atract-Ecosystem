@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import LeftSidebar from "../components/LeftSidebar";
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
 import MonetizationCard from "../components/MonetizationCard";
 
 import { API_BASE } from "../config/api";
@@ -421,24 +421,12 @@ ${generatedQuestions.map((q, i) => `${i + 1}. ${q.category}: ${q.question}`).joi
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Left Sidebar */}
-      <LeftSidebar 
-        app={app} 
-        isPro={isPaid}
-        ads={ads}
-        currentAd={currentAd}
-        onUpgrade={() => setShowPayment(true)}
-        onAdChange={setCurrentAd}
-      />
-
-      {/* Main Content */}
-      <div className="flex-1 ml-80 p-6">
-        {/* Payment Modal */}
-        {showPayment && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
-              <button
+    <CustomerMicroAppShell app={app}>
+      {/* Payment Modal */}
+      {showPayment && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
+            <button
                 onClick={() => setShowPayment(false)}
                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 z-10"
               >
@@ -906,7 +894,6 @@ ${generatedQuestions.map((q, i) => `${i + 1}. ${q.category}: ${q.question}`).joi
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </CustomerMicroAppShell>
   );
 }

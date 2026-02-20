@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
 // Template-based resume (used when AI fails or not configured)
 function buildTemplateResume(body) {
@@ -74,29 +75,24 @@ Generated: ${timestamp} | ATRact Resume Formatter Pro
   return resume;
 }
 
-// AI-powered resume generation (Anthropic Claude) - falls back to template if API key invalid
+// AI-powered resume generation (Groq) - falls back to template if API key invalid
 router.post("/generate-ai", async (req, res) => {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
   const body = req.body;
 
-  if (apiKey) {
-    try {
-      const {
-        targetRole = "",
-        targetCompany = "",
-        industry = "",
-        seniority = "Mid-level",
-        skills = "",
-        experience = "",
-        education = "",
-        achievements = "",
-        formatStyle = "modern",
-      } = body;
+  try {
+    const {
+      targetRole = "",
+      targetCompany = "",
+      industry = "",
+      seniority = "Mid-level",
+      skills = "",
+      experience = "",
+      education = "",
+      achievements = "",
+      formatStyle = "modern",
+    } = body;
 
-      const Anthropic = require("@anthropic-ai/sdk");
-      const anthropic = new Anthropic({ apiKey });
-
-      const prompt = `You are an expert resume writer specializing in ATS (Applicant Tracking System) optimization. Create a professional, ATS-friendly resume based on the following information:
+    const prompt = `You are an expert resume writer specializing in ATS (Applicant Tracking System) optimization. Create a professional, ATS-friendly resume based on the following information:
 
 TARGET INFORMATION:
 - Target Role: ${targetRole || "Not specified"}
@@ -132,21 +128,13 @@ REQUIREMENTS:
 
 Return ONLY the formatted resume text, no explanations. Use plain text with line breaks and simple formatting.`;
 
-      const msg = await anthropic.messages.create({
-        model: process.env.ANTHROPIC_MODEL || "claude-3-5-sonnet-20241022",
-        max_tokens: 3000,
-        messages: [{ role: "user", content: prompt }],
-      });
+    const resumeText = await completeWithGroq(prompt);
 
-      const textBlock = msg.content.find((b) => b.type === "text");
-      const resumeText = (textBlock?.text || "").trim();
-
-      if (resumeText) {
-        return res.json({ resume: resumeText });
-      }
-    } catch (err) {
-      console.error("AI resume generation error (falling back to template):", err.message);
+    if (resumeText) {
+      return res.json({ resume: resumeText });
     }
+  } catch (err) {
+    console.error("AI resume generation error (falling back to template):", err.message);
   }
 
   // Fallback: template format when API key missing, invalid, or AI errors

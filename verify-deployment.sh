@@ -22,7 +22,7 @@ echo ""
 
 # Check if all required env vars are set
 echo "✓ Checking environment variables:"
-required_vars=("MONGO_URI" "PORT" "GEMINI_API_KEY")
+required_vars=("MONGO_URI" "PORT" "GROQ_API_KEY")
 
 for var in "${required_vars[@]}"; do
     if [ -z "${!var}" ]; then

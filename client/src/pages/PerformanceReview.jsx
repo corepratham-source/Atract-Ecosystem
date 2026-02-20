@@ -1,526 +1,388 @@
 import { useState, useEffect } from "react";
-import LeftSidebar from "../components/LeftSidebar";
-import MonetizationCard from "../components/MonetizationCard";
+import Field from "../components/Field";
+import SectionTitle from "../components/SectionTitle";
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
-
 import { API_BASE } from "../config/api";
 
-const ads = [
-  {
-    title: "📈 Performance Insights",
-    text: "Get AI-powered performance analysis for better reviews",
-    button: "Try Free"
-  },
-  {
-    title: "🎯 Goal Tracking",
-    text: "Set and track employee goals effectively",
-    button: "Learn More"
-  },
-  {
-    title: "💡 Development Plans",
-    text: "Create personalized growth plans for your team",
-    button: "Upgrade"
-  }
-];
+const MAX_FREE_TRIALS = 2;
 
-export default function PerformanceReviewAnalyzer({ app, isPro = false }) {
-  // Track app usage
+const defaultApp = {
+  name: "Performance Review Generator",
+  valueProposition: "AI-Generated Insightful Reviews",
+  pricing: "₹299 per review",
+  icon: "⭐"
+};
+
+export default function PerformanceReview({ app = defaultApp }) {
   useTrackAppUsage('performance-review');
   
-  const [currentAd, setCurrentAd] = useState(0);
-  const [formData, setFormData] = useState({
+  const [form, setForm] = useState({
     employeeName: "",
-    employeeId: "",
-    department: "",
-    position: "",
-    managerName: "",
-    reviewPeriod: "Q4 2024",
-    reviewType: "Annual",
+    role: "",
+    ratingPeriod: "",
+    performanceArea: "Technical Skills",
+    strengths: "",
+    areasToImprove: "",
+    rating: "4",
+    feedback: "",
   });
-  const [selfReview, setSelfReview] = useState("");
-  const [managerFeedback, setManagerFeedback] = useState("");
-  const [analysis, setAnalysis] = useState(null);
-  const [showPayment, setShowPayment] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [activeTab, setActiveTab] = useState("analyze");
-  const [analysisCount, setAnalysisCount] = useState(0);
+  const [output, setOutput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [trialCount, setTrialCount] = useState(0);
+  const [isPaid, setIsPaid] = useState(false);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentAd((prev) => (prev + 1) % ads.length);
-    }, 5000);
-    return () => clearInterval(interval);
+    const stored = sessionStorage.getItem("performanceReviewTrials");
+    if (stored !== null) setTrialCount(parseInt(stored, 10));
+    const paid = sessionStorage.getItem("performanceReviewPaid") === "true";
+    setIsPaid(paid);
   }, []);
 
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const updateTrialCount = (count) => {
+    setTrialCount(count);
+    sessionStorage.setItem("performanceReviewTrials", count.toString());
   };
 
-  const handleUpgrade = () => {
-    setShowPayment(true);
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://checkout.razorpay.com/v1/checkout.js";
+      script.onload = () => resolve();
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
   };
 
-  const processPayment = () => {
-    setIsProcessing(true);
-    setTimeout(() => {
-      setIsProcessing(false);
-      setShowPayment(false);
-    }, 1500);
-  };
-
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-  const analyzeReview = async () => {
-    if (!selfReview.trim() && !managerFeedback.trim()) return;
-
-    // Check if pro feature is needed
-    if (!isPro && analysisCount >= 3) {
-      setShowPayment(true);
-      return;
-    }
-
-    setIsAnalyzing(true);
+  const generateReview = async () => {
+    setIsLoading(true);
+    setError("");
     try {
-      const res = await fetch(`${API_BASE}/api/performance-review/analyze`, {
+      const res = await fetch(`${API_BASE}/api/performance-review/generate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ selfReview, managerFeedback }),
+        body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Analysis failed");
-      setAnalysis(data);
-      setAnalysisCount(prev => prev + 1);
-      setActiveTab("results");
+      if (!res.ok) throw new Error(data.error || "Failed to generate review");
+      setOutput(data.review || data.output);
+      if (!isPaid) updateTrialCount(trialCount + 1);
     } catch (err) {
-      setAnalysis({
-        overallTone: "Error",
-        strengthCount: 0,
-        concernCount: 0,
-        detectedThemes: ["Analysis failed"],
-        suggestedSummary: [err.message || "Please try again"],
-        nextSteps: [],
-        estimatedRating: 0,
-        promotionEligible: false,
-        bonusEligible: false,
-        generatedAt: new Date().toLocaleString(),
-      });
-      setActiveTab("results");
+      setError(err.message || "Something went wrong");
+      setOutput("");
     } finally {
-      setIsAnalyzing(false);
+      setIsLoading(false);
     }
   };
 
-  const copyReport = () => {
-    if (!analysis) return;
+  const handlePayment = async (plan) => {
+    setError("");
+    try {
+      const res = await fetch(`${API_BASE}/api/payment/create-order`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) {
+        if (data.error?.includes("not configured")) {
+          alert("Payment not configured. For demo: marking as paid.");
+          setIsPaid(true);
+          sessionStorage.setItem("performanceReviewPaid", "true");
+          setShowPaymentModal(false);
+          updateTrialCount(0);
+          generateReview();
+        } else {
+          setError(data.error || "Failed to create order");
+        }
+        return;
+      }
+      await loadRazorpayScript();
+      if (!window.Razorpay) {
+        setError("Payment script failed to load");
+        return;
+      }
+      const options = {
+        key: data.keyId,
+        amount: data.amount,
+        currency: data.currency,
+        name: "ATRact Performance Review Generator",
+        description: plan === "basic" ? "Basic - Single Review" : "Premium - Multiple Reviews",
+        order_id: data.orderId,
+        handler: async (response) => {
+          try {
+            const verifyRes = await fetch(`${API_BASE}/api/payment/verify`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyData.success) {
+              setIsPaid(true);
+              sessionStorage.setItem("performanceReviewPaid", "true");
+              setShowPaymentModal(false);
+              updateTrialCount(0);
+              generateReview();
+              alert("Payment successful! Generating your review...");
+            } else {
+              setError("Payment verification failed");
+            }
+          } catch {
+            setError("Could not verify payment");
+          }
+        },
+        prefill: { name: "User", email: "user@example.com", contact: "9999999999" },
+        theme: { color: "#4F46E5" },
+        modal: { ondismiss: () => {} },
+      };
+      const rzp = new window.Razorpay(options);
+      rzp.on("payment.failed", () => {
+        setError("Payment failed. Please try again.");
+      });
+      rzp.open();
+    } catch (err) {
+      setError(err.message || "Payment failed");
+    }
+  };
 
-    const report = `PERFORMANCE REVIEW ANALYSIS
-=============================
-Generated: ${analysis.generatedAt}
+  const handleGenerate = () => {
+    if (!form.employeeName?.trim() || !form.role?.trim()) {
+      setError("Employee name and role are required");
+      return;
+    }
+    if (trialCount >= MAX_FREE_TRIALS && !isPaid) {
+      setShowPaymentModal(true);
+    } else {
+      generateReview();
+    }
+  };
 
-EMPLOYEE INFORMATION
---------------------
-Name: ${formData.employeeName || "[Name]"}
-ID: ${formData.employeeId || "[ID]"}
-Department: ${formData.department || "[Department]"}
-Position: ${formData.position || "[Position]"}
-Manager: ${formData.managerName || "[Manager]"}
-Review Period: ${formData.reviewPeriod}
-Review Type: ${formData.reviewType}
+  const downloadReview = () => {
+    const element = document.createElement("a");
+    const file = new Blob([output], { type: "text/plain" });
+    element.href = URL.createObjectURL(file);
+    element.download = `performance-review-${form.employeeName}.txt`;
+    document.body.appendChild(element);
+    element.click();
+    document.body.removeChild(element);
+  };
 
-ANALYSIS SUMMARY
----------------
-Overall Tone: ${analysis.overallTone}
-Estimated Rating: ${analysis.estimatedRating}/5
-Strengths Identified: ${analysis.strengthCount}
-Development Areas: ${analysis.concernCount}
-
-DETECTED THEMES
----------------
-${analysis.detectedThemes.map(t => `• ${t}`).join('\n')}
-
-SUGGESTED SUMMARY
------------------
-${analysis.suggestedSummary.map(p => `• ${p}`).join('\n')}
-
-RECOMMENDED NEXT STEPS
----------------------
-${analysis.nextSteps.map((s) => `[${s.type}] ${s.action}`).join('\n')}
-
-RECOMMENDATIONS
----------------
-${analysis.promotionEligible ? "✓ Eligible for promotion consideration" : "✗ Not yet ready for promotion"}
-${analysis.bonusEligible ? "✓ Eligible for performance bonus" : "✗ Bonus not recommended based on current performance"}
-
----
-Generated by Atract HR Performance Review Helper
-`;
-
-    navigator.clipboard.writeText(report);
+  const getRatingLabel = (rating) => {
+    const ratings = { "2": "Needs Improvement", "3": "Meets Expectations", "4": "Exceeds Expectations", "5": "Outstanding" };
+    return ratings[rating] || "Meets Expectations";
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      {/* Left Sidebar */}
-      <LeftSidebar 
-        app={app} 
-        isPro={isPro}
-        ads={ads}
-        currentAd={currentAd}
-        onUpgrade={handleUpgrade}
-        onAdChange={setCurrentAd}
-      />
+    <CustomerMicroAppShell app={app}>
+      <div className="max-w-5xl mx-auto">
+          <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="flex-1 flex flex-col divide-y divide-slate-200">
+              {/* Header */}
+              <div className="px-6 py-4 sm:px-8 sm:py-6 bg-gradient-to-r from-emerald-50 to-teal-50">
+                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Performance Review Generator</h2>
+                <p className="text-slate-600 mt-1">Create thoughtful, structured performance reviews.</p>
+                {!isPaid && (
+                  <p className="text-sm text-amber-600 mt-2 font-medium">Free trials remaining: {MAX_FREE_TRIALS - trialCount}/{MAX_FREE_TRIALS}</p>
+                )}
+              </div>
 
-      {/* Main Content */}
-      <div className="flex-1 ml-80 p-6">
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 sm:p-8">
+            {/* Input Section */}
+            <div className="space-y-6">
+              {error && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  {error}
+                </div>
+              )}
+
+              <SectionTitle title="Review Details" description="Provide performance information" />
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Employee Name">
+                  <input
+                    value={form.employeeName}
+                    onChange={(e) => setForm({...form, employeeName: e.target.value})}
+                    placeholder="e.g. Sarah Johnson"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  />
+                </Field>
+                <Field label="Job Role">
+                  <input
+                    value={form.role}
+                    onChange={(e) => setForm({...form, role: e.target.value})}
+                    placeholder="e.g. Senior Developer"
+                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                  />
+                </Field>
+              </div>
+
+              <Field label="Rating Period">
+                <input
+                  value={form.ratingPeriod}
+                  onChange={(e) => setForm({...form, ratingPeriod: e.target.value})}
+                  placeholder="e.g. Q4 2024"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                />
+              </Field>
+
+              <Field label="Performance Area">
+                <select
+                  value={form.performanceArea}
+                  onChange={(e) => setForm({...form, performanceArea: e.target.value})}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                >
+                  <option value="Technical Skills">Technical Skills</option>
+                  <option value="Communication">Communication</option>
+                  <option value="Leadership">Leadership</option>
+                  <option value="Teamwork">Teamwork</option>
+                  <option value="Time Management">Time Management</option>
+                  <option value="Problem Solving">Problem Solving</option>
+                </select>
+              </Field>
+
+              <Field label="Key Strengths">
+                <textarea
+                  value={form.strengths}
+                  onChange={(e) => setForm({...form, strengths: e.target.value})}
+                  placeholder="e.g. Strong coding skills, good collaboration..."
+                  rows="3"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none resize-none"
+                />
+              </Field>
+
+              <Field label="Areas for Improvement">
+                <textarea
+                  value={form.areasToImprove}
+                  onChange={(e) => setForm({...form, areasToImprove: e.target.value})}
+                  placeholder="e.g. Project prioritization, public speaking..."
+                  rows="3"
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none resize-none"
+                />
+              </Field>
+
+              <Field label="Overall Rating">
+                <select
+                  value={form.rating}
+                  onChange={(e) => setForm({...form, rating: e.target.value})}
+                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                >
+                  <option value="2">Needs Improvement</option>
+                  <option value="3">Meets Expectations</option>
+                  <option value="4">Exceeds Expectations</option>
+                  <option value="5">Outstanding</option>
+                </select>
+              </Field>
+
+              {!isPaid && (
+                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-medium text-emerald-900 text-sm">Free Trial Progress</span>
+                    <span className="text-xs font-semibold text-emerald-700">{trialCount}/{MAX_FREE_TRIALS}</span>
+                  </div>
+                  <div className="h-2 bg-emerald-200 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all"
+                      style={{ width: `${(trialCount / MAX_FREE_TRIALS) * 100}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={handleGenerate}
+                disabled={!form.employeeName || !form.role || isLoading}
+                className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${
+                  form.employeeName && form.role && !isLoading
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg"
+                    : "bg-slate-200 text-slate-500 cursor-not-allowed"
+                }`}
+              >
+                {isLoading ? "Generating..." : "⭐ Generate Review"}
+              </button>
+            </div>
+
+            {/* Output Section */}
+            <div className="space-y-4">
+              {!output ? (
+                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-8 text-center border border-emerald-200 h-full flex flex-col justify-center">
+                  <div className="text-5xl mb-4">📋</div>
+                  <h3 className="text-xl font-bold text-slate-900 mb-2">Generated Review</h3>
+                  <p className="text-slate-600">Fill details on the left and click Generate to create your professional performance review.</p>
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg p-6 border border-slate-200 h-full flex flex-col">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{form.employeeName}</h3>
+                      <p className="text-sm text-slate-600">{getRatingLabel(form.rating)}</p>
+                    </div>
+                    <button
+                      onClick={downloadReview}
+                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-all"
+                    >
+                      ⬇️ Download
+                    </button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto bg-slate-50 p-4 rounded-lg border border-slate-200 whitespace-pre-wrap text-sm text-slate-700">
+                    {output}
+                  </div>
+                </div>
+              )}
+              </div>
+            </div>
+          </div>
+        </div>
+        </div>
+
+        {/* Pricing Info */}
+        <div className="px-6 py-4 sm:px-8 sm:py-5 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
+          Pricing: <span className="font-semibold text-slate-900">{app.pricing}</span>
+        </div>
+
         {/* Payment Modal */}
-        {showPayment && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-2xl">
-              <h3 className="text-xl font-bold text-gray-900">Unlock Performance Review Helper</h3>
-              <p className="text-gray-600 mt-2">Get unlimited performance reviews analysis with AI insights</p>
-              
-              <div className="mt-4 bg-gray-50 rounded-xl p-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Monthly subscription</span>
-                  <span className="text-2xl font-bold text-gray-900">₹299/month</span>
-                </div>
-                <div className="mt-2 text-sm text-gray-500">
-                  • Unlimited analysis<br/>
-                  • Detailed recommendations<br/>
-                  • Export reports
-                </div>
+        {showPaymentModal && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+              <div className="p-6 text-center border-b border-gray-200">
+                <div className="text-3xl mb-2">🔒</div>
+                <h2 className="text-2xl font-bold text-gray-900">Free Trials Used</h2>
+                <p className="text-gray-600 mt-1">Upgrade to continue generating reviews.</p>
               </div>
 
-              <button
-                onClick={processPayment}
-                disabled={isProcessing}
-                className="w-full mt-4 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white rounded-xl font-semibold hover:opacity-90 transition-opacity disabled:opacity-50"
-              >
-                {isProcessing ? "Processing..." : "Subscribe - ₹299/month"}
-              </button>
-
-              <button
-                onClick={() => setShowPayment(false)}
-                className="w-full mt-3 py-2 text-gray-500 hover:text-gray-700"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Sticky Header */}
-        <div className="sticky top-0 z-10 bg-gray-100 pb-4 -mx-6 px-6">
-          <h1 className="text-3xl font-bold text-gray-900">{app?.name || "Performance Review Helper"}</h1>
-          <p className="text-gray-600 mt-1">{app?.valueProposition || "Self + manager review drafts"}</p>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-2 mb-6">
-          <button
-            onClick={() => setActiveTab("analyze")}
-            className={`px-4 py-2 rounded-xl font-medium transition-all ${
-              activeTab === "analyze"
-                ? "bg-blue-500 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            📋 Analyze Review
-          </button>
-          <button
-            onClick={() => setActiveTab("results")}
-            className={`px-4 py-2 rounded-xl font-medium transition-all ${
-              activeTab === "results"
-                ? "bg-blue-500 text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-            }`}
-            disabled={!analysis}
-          >
-            📊 Results {analysis ? "" : "(0)"}
-          </button>
-        </div>
-
-        {/* Analyze Tab */}
-        {activeTab === "analyze" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Employee Info */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Employee Information</h2>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee Name</label>
-                    <input
-                      type="text"
-                      name="employeeName"
-                      value={formData.employeeName}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g. John Doe"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Employee ID</label>
-                    <input
-                      type="text"
-                      name="employeeId"
-                      value={formData.employeeId}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g. EMP001"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
-                    <input
-                      type="text"
-                      name="department"
-                      value={formData.department}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g. Engineering"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Position</label>
-                    <input
-                      type="text"
-                      name="position"
-                      value={formData.position}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g. Senior Developer"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Reporting Manager</label>
-                    <input
-                      type="text"
-                      name="managerName"
-                      value={formData.managerName}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Manager name"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Review Period</label>
-                    <input
-                      type="text"
-                      name="reviewPeriod"
-                      value={formData.reviewPeriod}
-                      onChange={handleInputChange}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g. Q4 2024"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Review Inputs */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Review Inputs</h2>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Self-Review Text (Optional)</label>
-                    <textarea
-                      value={selfReview}
-                      onChange={(e) => setSelfReview(e.target.value)}
-                      rows={6}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Paste employee's self assessment here..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Manager Feedback / Comments (Optional)</label>
-                    <textarea
-                      value={managerFeedback}
-                      onChange={(e) => setManagerFeedback(e.target.value)}
-                      rows={6}
-                      className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="Paste manager's written feedback here..."
-                    />
-                  </div>
-
+              <div className="p-6 space-y-4">
+                <div className="border-2 border-emerald-200 rounded-xl p-4 hover:border-emerald-400 transition-all">
+                  <h3 className="text-lg font-bold text-emerald-900 mb-1">Basic</h3>
+                  <div className="text-2xl font-bold text-emerald-700">₹199</div>
                   <button
-                    onClick={analyzeReview}
-                    disabled={(!selfReview.trim() && !managerFeedback.trim()) || isAnalyzing}
-                    className={`w-full py-3 rounded-xl font-semibold transition-all ${
-                      (selfReview.trim() || managerFeedback.trim()) && !isAnalyzing
-                        ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:opacity-90 shadow-md"
-                        : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                    }`}
+                    onClick={() => handlePayment("review_basic")}
+                    className="w-full mt-3 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700"
                   >
-                    {isAnalyzing ? "Analyzing..." : (isPro ? "Analyze Performance Review" : `Analyze (${analysisCount}/3 free)`)}
+                    Upgrade Now
                   </button>
                 </div>
               </div>
-            </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              <MonetizationCard app={app} />
-              
-              {/* Quick Stats */}
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Review Summary</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Review Type</span>
-                    <span className="font-medium">{formData.reviewType}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Period</span>
-                    <span className="font-medium">{formData.reviewPeriod}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">How It Works</h3>
-                <ol className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-start gap-2">
-                    <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                    <span>Enter employee details</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
-                    <span>Paste self/manager reviews</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">3</span>
-                    <span>Get AI-powered insights</span>
-                  </li>
-                </ol>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Results Tab */}
-        {activeTab === "results" && analysis && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Analysis Results */}
-              <div className="bg-white rounded-2xl shadow-sm p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Analysis Results</h2>
-                  <button
-                    onClick={copyReport}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
-                  >
-                    Copy Report
-                  </button>
-                </div>
-
-                {/* Rating Badge */}
-                <div className="flex items-center gap-4 mb-6 p-4 bg-gray-50 rounded-xl">
-                  <div className="text-center">
-                    <div className="text-3xl font-bold text-gray-900">{analysis.estimatedRating}</div>
-                    <div className="text-xs text-gray-500">/ 5</div>
-                  </div>
-                  <div className="flex-1">
-                    <div className="font-semibold text-gray-900">Estimated Rating</div>
-                    <div className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-medium ${
-                      analysis.overallTone.includes("Positive") ? "bg-green-100 text-green-700" :
-                      analysis.overallTone.includes("Needs") ? "bg-red-100 text-red-700" :
-                      "bg-amber-100 text-amber-700"
-                    }`}>
-                      {analysis.overallTone}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recommendations */}
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                  <div className={`p-4 rounded-xl border ${analysis.promotionEligible ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{analysis.promotionEligible ? "✅" : "❌"}</span>
-                      <span className="font-medium">Promotion Eligible</span>
-                    </div>
-                  </div>
-                  <div className={`p-4 rounded-xl border ${analysis.bonusEligible ? "bg-green-50 border-green-200" : "bg-gray-50 border-gray-200"}`}>
-                    <div className="flex items-center gap-2">
-                      <span className="text-lg">{analysis.bonusEligible ? "✅" : "❌"}</span>
-                      <span className="font-medium">Bonus Eligible</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Themes */}
-                <div className="mb-6">
-                  <h3 className="font-semibold text-gray-900 mb-3">Detected Themes</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {analysis.detectedThemes.map((t, i) => (
-                      <span key={i} className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Summary */}
-                <div className="mb-6">
-                  <h3 className="font-semibold text-gray-900 mb-3">Suggested Summary</h3>
-                  <ul className="space-y-2">
-                    {analysis.suggestedSummary.map((p, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-gray-700">
-                        <span className="mt-1 w-1.5 h-1.5 bg-blue-500 rounded-full flex-shrink-0"></span>
-                        {p}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                {/* Next Steps */}
-                <div>
-                  <h3 className="font-semibold text-gray-900 mb-3">Recommended Next Steps</h3>
-                  <div className="space-y-3">
-                    {analysis.nextSteps.map((s, i) => (
-                      <div key={i} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                        <span className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          s.type === "Strength" ? "bg-green-100 text-green-700" :
-                          s.type === "Development" ? "bg-red-100 text-red-700" :
-                          s.type === "Discussion" ? "bg-blue-100 text-blue-700" :
-                          "bg-purple-100 text-purple-700"
-                        }`}>
-                          {s.type}
-                        </span>
-                        <span className="text-sm text-gray-900">{s.action}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Sidebar */}
-            <div className="space-y-6">
-              <MonetizationCard app={app} />
-              
-              {/* Stats */}
-              <div className="bg-white rounded-2xl shadow-sm p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Analysis Stats</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-green-50 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-green-700">{analysis.strengthCount}</div>
-                    <div className="text-xs text-green-600">Strengths</div>
-                  </div>
-                  <div className="bg-red-50 rounded-xl p-3 text-center">
-                    <div className="text-xl font-bold text-red-700">{analysis.concernCount}</div>
-                    <div className="text-xs text-red-600">Developments</div>
-                  </div>
-                </div>
+              <div className="p-4 bg-gray-50 text-center border-t">
+                <button onClick={() => setShowPaymentModal(false)} className="text-gray-500 hover:text-gray-700 font-medium text-sm">
+                  Maybe later
+                </button>
               </div>
             </div>
           </div>
         )}
       </div>
-    </div>
+    </CustomerMicroAppShell>
   );
 }

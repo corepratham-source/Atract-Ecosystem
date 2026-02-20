@@ -1,12 +1,7 @@
 /**
- * Central API base URL for all backend requests.
- * Set VITE_API_URL in .env for production (e.g. https://your-api.com)
+ * Backend API base URL. In dev we call the backend directly on port 5000 (no proxy).
+ * Set VITE_API_URL in .env to override (e.g. for production).
  */
-// If VITE_API_URL is set during build, use it. Otherwise default to the current
-// origin (so the frontend and backend can be served from the same host), and
-// finally fall back to localhost for local development.
-export const API_BASE = import.meta.env.VITE_API_URL || (
-	typeof window !== 'undefined' && window.location && window.location.origin
-		? window.location.origin
-		: 'http://localhost:5000'
-);
+export const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.DEV ? "http://localhost:5000" : (typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost:5000"));

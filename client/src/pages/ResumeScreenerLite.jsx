@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
-import mammoth from "mammoth";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
@@ -33,6 +32,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
   const [uploadedResumes, setUploadedResumes] = useState([]);
   const [matchResults, setMatchResults] = useState([]);
   const [currentResumeId, setCurrentResumeId] = useState(null);
+  const [uploadedFile, setUploadedFile] = useState(null);
 
   useEffect(() => {
     const stored = sessionStorage.getItem("resumeScreenerTrials");
@@ -48,6 +48,8 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
       const data = await res.json();
       if (data && Array.isArray(data)) {
         setUploadedResumes(data);
+      } else if (data && Array.isArray(data.resumes)) {
+        setUploadedResumes(data.resumes);
       }
     } catch (err) {
       console.error("Failed to fetch resumes:", err);
@@ -60,63 +62,29 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
   };
 
   const extractDOCX = async (arrayBuffer) => {
-    try {
-      const result = await mammoth.extractRawText({ arrayBuffer });
-      return result.value || "No text found";
-    } catch {
-      return "Error reading DOCX";
-    }
+    // No longer needed - backend extracts text using mammoth
+    return "";
   };
 
   const extractPDF = (arrayBuffer) => {
-    try {
-      const bytes = new Uint8Array(arrayBuffer);
-      const text = new TextDecoder().decode(bytes);
-      const match = text.match(/stream\s+([\s\S]*?)\s+endstream/);
-      if (match) {
-        const clean = match[1].replace(/[^\x20-\x7E]/g, " ").replace(/\s+/g, " ").trim();
-        return clean || "Unable to extract PDF";
-      }
-      return "Unable to extract PDF";
-    } catch {
-      return "Error reading PDF";
-    }
+    // No longer needed - backend extracts text using pdf-parse
+    return "";
   };
 
   const handleFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    setIsProcessing(true);
+    setUploadedFile(file);  // Store the actual file object, not extracted text
+    setResumeText("");     // Clear any previous extracted text - backend will extract
     setError("");
-    try {
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        const buffer = e.target?.result;
-        let text = "";
-        if (file.type === "application/pdf") {
-          text = extractPDF(buffer);
-        } else if (file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
-          text = await extractDOCX(buffer);
-        } else if (file.type === "text/plain") {
-          text = new TextDecoder().decode(buffer);
-        } else {
-          text = "Unsupported file type";
-        }
-        setResumeText(text);
-        setIsProcessing(false);
-      };
-      reader.readAsArrayBuffer(file);
-    } catch {
-      setError("Error reading file");
-      setIsProcessing(false);
-    }
+    setIsProcessing(false);  // Don't process here - wait for analyze button
   };
 
   // Analyze and automatically store resume in database
   const analyzeAndStoreResume = async () => {
-    if (!jd || !resumeText) {
-      setError("Please enter JD and upload resume");
+    if (!jd || !uploadedFile) {
+      setError("Please enter JD and upload a resume");
       return;
     }
 
@@ -130,32 +98,37 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     setError("");
 
     try {
-      // First, upload to database (no button needed)
+      //Use FormData to send the actual file to backend
+      // The backend will use pdf-parse/mammoth to extract text properly
+      const formData = new FormData();
+      formData.append("resume", uploadedFile);  // "resume" must match upload.single("resume") in backend
+      formData.append("name", fileName.replace(/\.[^.]+$/, ""));  // Name without extension
+
       const uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          name: fileName || "Uploaded Resume", 
-          text: resumeText 
-        }),
+        // ⚠️ DO NOT set Content-Type header — browser sets it automatically with boundary
+        body: formData,
       });
 
       const uploadData = await uploadResponse.json();
       
       if (uploadData.error) {
-        setError(uploadData.error);
+        setError(uploadData.error + (uploadData.suggestion ? ` ${uploadData.suggestion}` : ""));
         setIsProcessing(false);
         return;
       }
 
-      // Get the resume ID
+      // Get the resume ID and extracted text
       const resumeId = uploadData.id;
+      const extractedText = uploadData.text || "";  // Backend returns extracted text in response
+
+      console.log(`[Upload] ✅ Success: ${uploadData.textLength} chars extracted via ${uploadData.extractionMethod}`);
 
       // Then analyze the resume
       const analyzeResponse = await fetch(`${API_BASE}/api/analysis/analyze`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jdText: jd, resumeText }),
+        body: JSON.stringify({ jdText: jd, resumeText: extractedText }),
       });
 
       const analyzeData = await analyzeResponse.json();
@@ -215,12 +188,9 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
       setResult({
         overallScore: found.matchPercentage,
         similarityScore: found.tfidfSimilarity,
-        verdict: found.matchPercentage >= 80 ? "Excellent Match" : 
-                 found.matchPercentage >= 60 ? "Good Match" : 
-                 found.matchPercentage >= 40 ? "Moderate Match" : "Weak Match",
-        verdictColor: found.matchPercentage >= 80 ? "emerald" : 
-                      found.matchPercentage >= 60 ? "blue" : 
-                      found.matchPercentage >= 40 ? "amber" : "rose",
+        verdict: found.matchPercentage >= 75 ? "Excellent Match" : 
+                 found.matchPercentage >= 50 ? "Good Match" : "Poor Match",
+        verdictColor: found.matchPercentage >= 50 ? "green" : "red",
         matchedKeywords: found.matchedKeywords || [],
         missingKeywords: found.missingKeywords || [],
         isTechnical: found.isTechnical
@@ -396,7 +366,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                         <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2" />
                         <p className="text-gray-600 text-sm">Processing...</p>
                       </div>
-                    ) : resumeText ? (
+                    ) : uploadedFile ? (
                       <div className="text-center">
                         <svg className="w-10 h-10 text-green-600 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -418,9 +388,9 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
               <div className="p-6 border-t border-gray-100">
                 <button
                   onClick={analyzeAndStoreResume}
-                  disabled={!jd || !resumeText || isProcessing}
+                  disabled={!jd || !uploadedFile || isProcessing}
                   className={`w-full py-3 rounded-lg font-semibold transition-all ${
-                    jd && resumeText && !isProcessing
+                    jd && uploadedFile && !isProcessing
                       ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md"
                       : "bg-gray-200 text-gray-500 cursor-not-allowed"
                   }`}
@@ -473,10 +443,8 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                     <h3 className="font-semibold text-gray-900">Overall Match Score</h3>
                     <span
                       className={`px-4 py-2 rounded-full text-sm font-bold ${
-                        result.verdictColor === "emerald" ? "bg-emerald-100 text-emerald-700" :
-                        result.verdictColor === "blue" ? "bg-blue-100 text-blue-700" :
-                        result.verdictColor === "amber" ? "bg-amber-100 text-amber-700" :
-                        "bg-rose-100 text-rose-700"
+                        result.verdictColor === "green" ? "bg-green-100 text-green-700" :
+                        "bg-red-100 text-red-700"
                       }`}
                     >
                       {result.verdict}
@@ -491,10 +459,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                   <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-1000 ${
-                        result.verdictColor === "emerald" ? "bg-emerald-500" :
-                        result.verdictColor === "blue" ? "bg-blue-500" :
-                        result.verdictColor === "amber" ? "bg-amber-500" :
-                        "bg-rose-500"
+                        result.verdictColor === "green" ? "bg-green-500" : "bg-red-500"
                       }`}
                       style={{ width: `${result.overallScore}%` }}
                     />

@@ -12,11 +12,9 @@ services:
         scope: build
       - key: RAZORPAY_KEY_SECRET
         scope: build
-      - key: GEMINI_API_KEY
+      - key: GROQ_API_KEY
         scope: build
-      - key: GEMINI_MODEL
-        scope: build
-      - key: OPENAI_API_KEY
+      - key: GROQ_MODEL
         scope: build
       - key: PORT
         value: "5000"

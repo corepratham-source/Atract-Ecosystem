@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import MonetizationCard from "./MonetizationCard";
+import { ADMIN_BASE } from "../config/routes";
+import { STORAGE_KEY } from "./ProtectedRoute";
 
 const googleAds = [
   {
@@ -83,15 +85,25 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
       >
         {/* Fixed Header - Back button & App Name */}
         <div className="flex-shrink-0">
-          <div className="p-4 border-b border-gray-200">
+          <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-2">
             <button
-              onClick={() => { onClose?.(); navigate("/"); }}
+              onClick={() => { onClose?.(); navigate(ADMIN_BASE + "/"); }}
               className="flex items-center text-gray-600 hover:text-gray-900"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
               Back
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                localStorage.removeItem(STORAGE_KEY);
+                navigate("/login", { replace: true });
+              }}
+              className="text-sm font-medium text-slate-600 hover:text-slate-900 px-2 py-1 rounded-lg hover:bg-slate-100"
+            >
+              Logout
             </button>
           </div>
           
@@ -102,9 +114,9 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
           </div>
         </div>
         
-        {/* Scrollable Content - Only Ads & Monetization Card */}
+        {/* Scrollable Content - Ads (free users only) & Monetization Card */}
         <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-transparent">
-          {/* Google AdSense Style Ad - Only for non-pro users */}
+          {/* Ads: show only for free users; hidden when user has subscription (isPro) */}
           {!isPro && (
             <div className="p-4">
               <div 

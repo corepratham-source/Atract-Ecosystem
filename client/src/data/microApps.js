@@ -6,7 +6,8 @@ export const microApps = [
     valueProposition: "JD vs Resume quick match in seconds",
     pricing: "₹499/month or ₹99 per batch",
     status: "Live",
-    category: "HR-Tech"
+    category: "HR-Tech",
+    icon: "📋"
   },
   {
     id: "interview-questions",
@@ -14,7 +15,8 @@ export const microApps = [
     valueProposition: "Role-based question generation for interviews",
     pricing: "₹199/month",
     status: "Live",
-    category: "HR-Tech"
+    category: "HR-Tech",
+    icon: "❓"
   },
   {
     id: "offer-letter",
@@ -22,7 +24,8 @@ export const microApps = [
     valueProposition: "Professional offer letters in minutes",
     pricing: "₹99 per letter",
     status: "Build",
-    category: "HR-Tech"
+    category: "HR-Tech",
+    icon: "📝"
   },
   {
     id: "salary-benchmark",
@@ -33,6 +36,7 @@ export const microApps = [
     category: "HR-Tech",
     audience: "HR, candidates",
     monetization: "High (jobs, upskilling ads). Resume services upsell.",
+    icon: "💰"
   },
   {
     id: "follow-up-tracker",
@@ -43,6 +47,7 @@ export const microApps = [
     category: "HR-Tech",
     audience: "Recruiters",
     monetization: "Low–Medium. CRM / ATS partnerships.",
+    icon: "🔄"
   },
   {
     id: "policy-builder",
@@ -50,7 +55,8 @@ export const microApps = [
     valueProposition: "Company policy drafts that comply",
     pricing: "₹999 one-time",
     status: "Build",
-    category: "HR-Tech"
+    category: "HR-Tech",
+    icon: "📜"
   },
   {
     id: "exit-interview",
@@ -61,7 +67,8 @@ export const microApps = [
     category: "HR-Tech",
     audience: "HR Managers",
     monetization: "Low",
-    referralPartners: "Consulting leads"
+    referralPartners: "Consulting leads",
+    icon: "🚪"
   },
   {
     id: "attendance-tracker",
@@ -72,7 +79,8 @@ export const microApps = [
     category: "HR-Tech",
     audience: "Small orgs",
     monetization: "Medium",
-    referralPartners: "HRMS integrations"
+    referralPartners: "HRMS integrations",
+    icon: "📅"
   },
   {
     id: "performance-review",
@@ -83,7 +91,8 @@ export const microApps = [
     category: "HR-Tech",
     audience: "Managers",
     monetization: "Medium",
-    referralPartners: "Coaching / L&D referrals"
+    referralPartners: "Coaching / L&D referrals",
+    icon: "⭐"
   },
   {
     id: "resume-formatter",
@@ -94,7 +103,8 @@ export const microApps = [
     category: "HR-Tech",
     audience: "Job seekers",
     monetization: "Very High",
-    referralPartners: "Job portals, courses"
+    referralPartners: "Job portals, courses",
+    icon: "📄"
   }
 ];
 

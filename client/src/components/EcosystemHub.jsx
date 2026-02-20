@@ -1,5 +1,6 @@
 import { microApps } from "../data/microApps";
 import { useNavigate } from "react-router-dom";
+import { ADMIN_BASE } from "../config/routes";
 
 export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
   const navigate = useNavigate();
@@ -20,7 +21,7 @@ export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
         console.error('Error storing recent apps:', err);
       }
     }
-    navigate(`/apps/${appId}`);
+    navigate(`${ADMIN_BASE}/apps/${appId}`);
   };
 
   const getStatusBadge = (status) => {

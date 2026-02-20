@@ -17,11 +17,33 @@ const policyBuilderRoutes = require("./routes/policyBuilderRoutes");
 const resumeFormatterRoutes = require("./routes/resumeFormatterRoutes");
 const salaryBenchmarkRoutes = require("./routes/salaryBenchmarkRoutes");
 const resumeRoutes = require("./routes/resumeRoutes");
+const authRoutes = require("./routes/authRoutes");
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+// Other auth routes from router
+app.use("/api/auth", authRoutes);
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    mongodb: isMongoConnected ? "connected" : "disconnected (demo mode)",
+    timestamp: new Date().toISOString()
+  });
+});
+app.use("/api/analysis", analysisRoutes);
+app.use("/api/payment", paymentRoutes);
+app.use("/api/attendance", attendanceRoutes);
+app.use("/api/exit-interview", exitInterviewRoutes);
+app.use("/api/interview", interviewRoutes);
+app.use("/api/offer-letter", offerLetterRoutes);
+app.use("/api/performance-review", performanceReviewRoutes);
+app.use("/api/policy-builder", policyBuilderRoutes);
+app.use("/api/resume-formatter", resumeFormatterRoutes);
+app.use("/api/resume", resumeRoutes);
+app.use("/api/salary-benchmark", salaryBenchmarkRoutes);
 
 // Flag to track MongoDB connection status
 let isMongoConnected = false;
@@ -152,28 +174,6 @@ app.delete("/apps/:id", async (req, res) => {
     return res.json({ message: "App deleted successfully" });
   }
   res.status(404).json({ error: "App not found" });
-});
-
-// API Routes
-app.use("/api/analysis", analysisRoutes);
-app.use("/api/payment", paymentRoutes);
-app.use("/api/attendance", attendanceRoutes);
-app.use("/api/exit-interview", exitInterviewRoutes);
-app.use("/api/interview", interviewRoutes);
-app.use("/api/offer-letter", offerLetterRoutes);
-app.use("/api/performance-review", performanceReviewRoutes);
-app.use("/api/policy-builder", policyBuilderRoutes);
-app.use("/api/resume-formatter", resumeFormatterRoutes);
-app.use("/api/resume", resumeRoutes);
-app.use("/api/salary-benchmark", salaryBenchmarkRoutes);
-
-// Health check endpoint
-app.get("/api/health", (req, res) => {
-  res.json({
-    status: "ok",
-    mongodb: isMongoConnected ? "connected" : "disconnected (demo mode)",
-    timestamp: new Date().toISOString()
-  });
 });
 
 // Serve static files from the React build folder

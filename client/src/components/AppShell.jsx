@@ -1,8 +1,10 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { ADMIN_BASE } from "../config/routes";
 
 const navItems = [
-  { to: "/", label: "Ecosystem Hub" },
-  { to: "/dashboard", label: "Control Tower" },
+  { to: ADMIN_BASE + "/", label: "Ecosystem Hub" },
+  { to: ADMIN_BASE + "/dashboard", label: "Control Tower" },
 ];
 
 function LogoMark() {
@@ -16,6 +18,22 @@ function LogoMark() {
 export default function AppShell({ title, subtitle, primaryAction, sidebarContent, children }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const [showAdminDropdown, setShowAdminDropdown] = useState(false);
+
+  // Get user from localStorage or session
+  const user = JSON.parse(
+    localStorage.getItem("user") || sessionStorage.getItem("user") || "{}"
+  );
+  const userName = user?.name || "Admin";
+  const userEmail = user?.email || "admin@atract.com";
+
+  const handleLogout = () => {
+    localStorage.removeItem("user");
+    localStorage.removeItem("token");
+    sessionStorage.removeItem("user");
+    sessionStorage.removeItem("token");
+    navigate("/login");
+  };
 
   const mobileNav = (
     <div className="flex gap-2">
@@ -101,9 +119,90 @@ export default function AppShell({ title, subtitle, primaryAction, sidebarConten
                     <p className="mt-1 text-sm text-slate-600">{subtitle}</p>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <div className="md:hidden">{mobileNav}</div>
                   {primaryAction ? primaryAction : null}
+
+                  {/* Admin Profile Dropdown */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowAdminDropdown(!showAdminDropdown)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-slate-100 transition-colors"
+                      title="Admin Menu"
+                    >
+                      {/* Profile Icon */}
+                      <svg
+                        className="w-5 h-5 text-slate-600"
+                        fill="currentColor"
+                        viewBox="0 0 20 20"
+                      >
+                        <path
+                          fillRule="evenodd"
+                          d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
+                          clipRule="evenodd"
+                        />
+                      </svg>
+                      {/* Admin Label */}
+                      <span className="text-sm font-medium text-slate-700">Admin</span>
+                      {/* Chevron Down */}
+                      {/* <svg
+                        className={`w-4 h-4 text-slate-600 transition-transform ${
+                          showAdminDropdown ? "rotate-180" : ""
+                        }`}
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M19 14l-7 7m0 0l-7-7m7 7V3"
+                        />
+                      </svg> */}
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {showAdminDropdown && (
+                      <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50">
+                        {/* Header with user info */}
+                        <div className="px-4 py-3 border-b border-slate-100">
+                          <div className="text-sm font-semibold text-slate-900">
+                            {userName}
+                          </div>
+                          <div className="text-xs text-slate-600 mt-1 break-words">
+                            {userEmail}
+                          </div>
+                        </div>
+
+                        {/* Logout button */}
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              setShowAdminDropdown(false);
+                              handleLogout();
+                            }}
+                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <svg
+                              className="w-4 h-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                              />
+                            </svg>
+                            Logout
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

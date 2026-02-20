@@ -1,20 +1,23 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import LeftSidebar from "../components/LeftSidebar";
-
+import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
+import { getStoredUser } from "../components/ProtectedRoute";
 import { API_BASE } from "../config/api";
+
 const MAX_FREE_TRIALS = 2;
 
 const defaultApp = {
   name: "Candidate Follow-up Tracker",
   valueProposition: "Never forget candidate follow-ups",
   pricing: "₹299/month",
-  audience: "Recruiters",
-  monetization: "Low–Medium. CRM / ATS partnerships.",
 };
 
-export default function CandidateFollowUpTracker({ app = defaultApp, isPro = false }) {
+export default function CandidateFollowUpTracker({ app = defaultApp }) {
+  useTrackAppUsage('candidate-followup-tracker');
+  
+  const [user, setUser] = useState(null);
   const [candidateName, setCandidateName] = useState("");
   const [role, setRole] = useState("");
   const [stage, setStage] = useState("Screening");
@@ -27,6 +30,8 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
   const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
+    const u = getStoredUser();
+    setUser(u);
     const stored = sessionStorage.getItem("followUpTrackerTrials");
     if (stored !== null) setTrialCount(parseInt(stored, 10));
     const paid = sessionStorage.getItem("followUpTrackerPaid") === "true";
@@ -52,7 +57,7 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
     });
   };
 
-  const handlePayment = async (plan) => {
+  const handlePayment = async () => {
     setPaymentLoading(true);
     setError("");
 
@@ -91,8 +96,8 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
         key: data.keyId,
         amount: data.amount,
         currency: data.currency,
-        name: "ATRact Follow-up Tracker",
-        description: "Monthly subscription - ₹299",
+        name: "Atract Follow-up Tracker",
+        description: "Monthly subscription",
         order_id: data.orderId,
         handler: async (response) => {
           try {
@@ -111,7 +116,7 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
               sessionStorage.setItem("followUpTrackerPaid", "true");
               setShowPayment(false);
               updateTrialCount(0);
-              alert("Payment successful! You now have unlimited access.");
+              alert("Payment successful!");
             } else {
               setError("Payment verification failed");
             }
@@ -121,14 +126,17 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
             setPaymentLoading(false);
           }
         },
-        prefill: { name: "Customer", email: "customer@example.com", contact: "9999999999" },
+        prefill: { 
+          name: user?.name || "Customer", 
+          email: user?.email || "customer@example.com", 
+          contact: "9999999999" 
+        },
         theme: { color: "#4F46E5" },
-        modal: { ondismiss: () => setPaymentLoading(false) },
       };
 
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", () => {
-        setError("Payment failed. Please try again.");
+        setError("Payment failed");
         setPaymentLoading(false);
       });
       rzp.open();
@@ -141,7 +149,7 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
 
   const addCandidate = () => {
     if (!candidateName?.trim() || !role?.trim() || !nextDate) {
-      setError("Candidate name, role, and next follow-up date are required");
+      setError("All fields required");
       return;
     }
 
@@ -181,255 +189,228 @@ export default function CandidateFollowUpTracker({ app = defaultApp, isPro = fal
   const canAdd = candidateName?.trim() && role?.trim() && nextDate;
 
   return (
-    <div className="flex min-h-screen bg-gray-100">
-      <LeftSidebar app={app} isPro={isPaid} />
+    <CustomerMicroAppShell app={app}>
+      <div className="max-w-5xl mx-auto">
+        {/* Main Card */}
+        <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="flex-1 flex flex-col divide-y divide-slate-200">
+            {/* Header moved to navbar (CustomerMicroAppShell) */}
 
-      <style>{`
-        /* Tiny scrollbar for all scrollable areas */
-        ::-webkit-scrollbar {
-          width: 4px !important;
-          height: 4px !important;
-        }
-        ::-webkit-scrollbar-track {
-          background: transparent !important;
-        }
-        ::-webkit-scrollbar-thumb {
-          background: #cbd5e1 !important;
-          border-radius: 2px !important;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-          background: #94a3b8 !important;
-        }
-        /* Firefox */
-        * {
-          scrollbar-width: thin !important;
-          scrollbar-color: #cbd5e1 transparent !important;
-        }
-      `}</style>
-
-      <div className="flex-1 ml-80 flex">
-        {/* LEFT – FORM (fixed) */}
-        <div className="w-1/2 h-screen overflow-hidden flex flex-col shrink-0">
-          <div className="bg-white border-r border-gray-200 flex flex-col h-full">
-            <div className="p-6 border-b border-gray-100">
-              <h2 className="text-xl font-bold text-gray-900">Candidate Follow-up Tracker</h2>
-              <p className="text-sm text-slate-500 mt-1">Never forget candidate follow-ups. For recruiters.</p>
-              {/* {!isPaid && (
-                <p className="text-sm text-amber-500 mt-1 font-medium">
-                  Free trial: {trialCount}/{MAX_FREE_TRIALS} used
-                </p>
-              )} */}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              {error && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {error}
-                </div>
-              )}
-              <SectionTitle
-                title="Create follow-ups"
-                description="Add candidates with the next follow-up date. Keep your pipeline moving daily."
-              />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Candidate name">
-                  <input
-                    value={candidateName}
-                    onChange={(e) => setCandidateName(e.target.value)}
-                    placeholder="e.g. Priya Sharma"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 sm:p-8 h-full">
+                {/* Input Section - Left */}
+                <div className="space-y-6">
+                  <SectionTitle
+                    title="Add Follow-up"
+                    description="Create new candidate follow-up tasks"
                   />
-                </Field>
-                <Field label="Role">
-                  <input
-                    value={role}
-                    onChange={(e) => setRole(e.target.value)}
-                    placeholder="e.g. Sales Executive"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </Field>
-                <Field label="Stage">
-                  <select
-                    value={stage}
-                    onChange={(e) => setStage(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option>Screening</option>
-                    <option>Interview</option>
-                    <option>Offer</option>
-                    <option>On hold</option>
-                  </select>
-                </Field>
-                <Field label="Next follow-up date">
-                  <input
-                    type="date"
-                    value={nextDate}
-                    onChange={(e) => setNextDate(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-500"
-                  />
-                </Field>
-              </div>
 
-              {!isPaid && (
-                <div className="bg-amber-50/60 border border-amber-100 rounded-xl p-3">
-                  <div className="flex justify-between text-sm mb-1">
-                    <span className="font-medium text-amber-800">Free Trial {trialCount}/{MAX_FREE_TRIALS}</span>
-                  </div>
-                  <div className="h-2 bg-amber-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-amber-500 to-orange-500 rounded-full transition-all"
-                      style={{ width: `${(trialCount / MAX_FREE_TRIALS) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+                    {error && (
+                      <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                        {error}
+                      </div>
+                    )}
 
-            <div className="p-6 border-t border-gray-100 shrink-0">
-              <button
-                type="button"
-                onClick={addCandidate}
-                disabled={!canAdd}
-                className={`w-full py-3 rounded-xl text-sm font-semibold transition-all ${
-                  canAdd
-                    ? "bg-slate-900 text-white hover:bg-slate-800 shadow-sm hover:shadow-md"
-                    : "bg-gray-200 text-gray-500 cursor-not-allowed"
-                }`}
-              >
-                Add to follow-up list
-              </button>
-              <p className="text-xs text-slate-500 mt-2 text-center">Pricing: {app.pricing}</p>
-            </div>
-          </div>
-        </div>
+                    <div className="space-y-4">
+                      <Field label="Candidate Name">
+                        <input
+                          value={candidateName}
+                          onChange={(e) => setCandidateName(e.target.value)}
+                          placeholder="e.g. Priya Sharma"
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
 
-        {/* RIGHT – CANDIDATE LIST (scrollable only) */}
-        <div className="w-1/2 h-screen overflow-y-auto bg-gray-50">
-          <div className="p-6">
-            <SectionTitle
-              title="Follow-up list"
-              description="Today & overdue. Click to mark done."
-            />
+                      <Field label="Role">
+                        <input
+                          value={role}
+                          onChange={(e) => setRole(e.target.value)}
+                          placeholder="e.g. Sales Executive"
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
 
-            <div className="mt-4 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-4 border-b border-slate-100">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-slate-900">Today & overdue</div>
-                  <div className="flex gap-2 text-xs">
-                    <span className="rounded-full bg-rose-50 text-rose-700 px-2 py-1 border border-rose-100 font-medium">
-                      Overdue: {overdueCount}
-                    </span>
-                    <span className="rounded-full bg-emerald-50 text-emerald-700 px-2 py-1 border border-emerald-100 font-medium">
-                      Today: {todayCount}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="max-h-[calc(100vh-16rem)] overflow-y-auto p-4 space-y-2">
-                {candidates.length === 0 ? (
-                  <div className="text-center text-slate-500 py-12">
-                    <div className="text-4xl mb-4">📋</div>
-                    <p className="font-medium">Add candidates to see follow-ups</p>
-                    <p className="text-sm mt-2">A simple daily list = fewer lost candidates.</p>
-                  </div>
-                ) : (
-                  [...candidates]
-                    .sort((a, b) => a.nextDate.localeCompare(b.nextDate))
-                    .map((c) => {
-                      const isOverdue = !c.done && c.nextDate < today;
-                      const isToday = !c.done && c.nextDate === today;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => toggleDone(c.id)}
-                          className={`w-full text-left rounded-xl border px-4 py-3 text-sm flex items-start justify-between gap-2 transition-all ${
-                            c.done
-                              ? "bg-slate-50 border-slate-200 text-slate-400 line-through"
-                              : "bg-white border-slate-200 hover:bg-slate-50"
-                          }`}
+                      <Field label="Pipeline Stage">
+                        <select
+                          value={stage}
+                          onChange={(e) => setStage(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
                         >
-                          <div>
-                            <div className="font-medium">{c.name}</div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              {c.role} • {c.stage}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5">
-                              Next follow-up: {c.nextDate}
-                            </div>
-                          </div>
-                          {!c.done && (isOverdue || isToday) && (
-                            <span
-                              className={`text-[11px] font-semibold rounded-full px-2 py-0.5 shrink-0 ${
-                                isOverdue
-                                  ? "bg-rose-50 text-rose-700 border border-rose-100"
-                                  : "bg-amber-50 text-amber-700 border border-amber-100"
-                              }`}
-                            >
-                              {isOverdue ? "Overdue" : "Today"}
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                )}
+                          <option value="Screening">Screening</option>
+                          <option value="Interview">Interview</option>
+                          <option value="Offer">Offer</option>
+                          <option value="On hold">On hold</option>
+                        </select>
+                      </Field>
+
+                      <Field label="Next Follow-up Date">
+                        <input
+                          type="date"
+                          value={nextDate}
+                          onChange={(e) => setNextDate(e.target.value)}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
+                    </div>
+
+                    {/* Trial Progress */}
+                    {!isPaid && (
+                      <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <span className="font-medium text-indigo-900 text-sm">Free Trial</span>
+                          <span className="text-xs font-semibold text-indigo-700">{trialCount}/{MAX_FREE_TRIALS}</span>
+                        </div>
+                        <div className="h-2 bg-indigo-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-gradient-to-r from-indigo-500 to-purple-600 rounded-full transition-all"
+                            style={{ width: `${(trialCount / MAX_FREE_TRIALS) * 100}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={addCandidate}
+                      disabled={!canAdd}
+                      className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${
+                        canAdd
+                          ? "bg-indigo-600 text-white hover:bg-indigo-700 shadow-md hover:shadow-lg"
+                          : "bg-slate-200 text-slate-500 cursor-not-allowed"
+                      }`}
+                    >
+                      Add to Follow-ups
+                    </button>
+                  </div>
+
+                  {/* Output Section - Right (scrollable) */}
+                  <div
+                    className="space-y-4  pr-2"
+                    style={{ maxHeight: 'calc(110vh - 8rem)' }}
+                  >
+                    <SectionTitle
+                      title="Follow-up Queue"
+                      description="Track today's and overdue follow-ups"
+                    />
+
+                    {candidates.length === 0 ? (
+                      <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg p-8 text-center border border-indigo-200 h-full flex flex-col justify-center min-h-[400px]">
+                        <div className="text-5xl mb-4">📋</div>
+                        <h3 className="text-lg font-bold text-slate-900">No candidates added</h3>
+                        <p className="text-slate-600 text-sm mt-2">Add candidates to see them here</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {[...candidates]
+                          .sort((a, b) => a.nextDate.localeCompare(b.nextDate))
+                          .map((c) => {
+                            const isOverdue = !c.done && c.nextDate < today;
+                            const isToday = !c.done && c.nextDate === today;
+                            return (
+                              <button
+                                key={c.id}
+                                onClick={() => toggleDone(c.id)}
+                                className={`w-full text-left p-4 rounded-lg border transition-all ${
+                                  c.done
+                                    ? "bg-slate-50 border-slate-200"
+                                    : "bg-white border-slate-200 hover:bg-slate-50"
+                                }`}
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1">
+                                    <div className={`font-semibold ${c.done ? "line-through text-slate-400" : "text-slate-900"}`}>
+                                      {c.name}
+                                    </div>
+                                    <div className="text-sm text-slate-600 mt-1">
+                                      {c.role} • {c.stage}
+                                    </div>
+                                    <div className="text-xs text-slate-500 mt-2">
+                                      📅 {new Date(c.nextDate).toLocaleDateString("en-IN")}
+                                    </div>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-2">
+                                    <div className={`w-5 h-5 rounded-full border-2 transition-all ${
+                                      c.done
+                                        ? "bg-green-500 border-green-500"
+                                        : "border-slate-300"
+                                    }`} />
+                                    {!c.done && (isOverdue || isToday) && (
+                                      <span className={`text-xs font-bold px-2 py-1 rounded ${
+                                        isOverdue
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-amber-100 text-amber-700"
+                                      }`}>
+                                        {isOverdue ? "Overdue" : "Today"}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </button>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+
+          {/* Footer / Pricing */}
+          <div className="mt-6 px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-600 text-center">
+            Pricing: <span className="font-semibold text-slate-900">{app?.pricing}</span>
+          </div>
         </div>
-      </div>
 
-      {/* Payment Modal - Subscription */}
-      {showPayment && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
-            <button
-              onClick={() => setShowPayment(false)}
-              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 z-10"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-
-            <div className="p-6">
-              <div className="text-3xl mb-4 text-center">🔒</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Free Trial Used</h2>
-              <p className="text-gray-600 text-sm mb-6">You've used your 1 free add. Subscribe for unlimited follow-ups.</p>
-
-              <div className="bg-indigo-50 rounded-xl p-4 mb-6">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-700 font-medium">Monthly subscription</span>
-                  <span className="text-2xl font-bold text-indigo-700">₹299/month</span>
-                </div>
-                <p className="text-xs text-slate-500 mt-2">Unlimited candidate follow-ups</p>
-              </div>
-
-              {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {error}
-                </div>
-              )}
-
+        {/* Payment Modal */}
+        {showPayment && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
               <button
-                onClick={() => handlePayment("follow_up_tracker")}
-                disabled={paymentLoading}
-                className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={() => setShowPayment(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
               >
-                {paymentLoading ? "Processing..." : "Subscribe ₹299/month"}
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
-            </div>
 
-            <div className="p-4 bg-gray-50 text-center border-t">
-              <button onClick={() => setShowPayment(false)} className="text-gray-500 hover:text-gray-700 font-medium text-sm">
-                Maybe later
-              </button>
+              <div className="p-6">
+                <div className="text-3xl mb-4 text-center">🔒</div>
+                <h2 className="text-xl font-bold text-gray-900 mb-2">Free Trial Ended</h2>
+                <p className="text-gray-600 text-sm mb-6">Subscribe for unlimited follow-ups and candidate management</p>
+
+                <div className="bg-indigo-50 rounded-lg p-4 mb-6">
+                  <div className="text-2xl font-bold text-indigo-700">₹299<span className="text-sm">/month</span></div>
+                  <p className="text-sm text-slate-600 mt-2">Unlimited candidates • Unlimited follow-ups</p>
+                </div>
+
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <button
+                  onClick={handlePayment}
+                  disabled={paymentLoading}
+                  className="w-full py-3 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                >
+                  {paymentLoading ? "Processing..." : "Subscribe Now"}
+                </button>
+              </div>
+
+              <div className="p-4 bg-gray-50 text-center border-t">
+                <button 
+                  onClick={() => setShowPayment(false)} 
+                  className="text-gray-500 hover:text-gray-700 font-medium text-sm"
+                >
+                  Maybe later
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+    </CustomerMicroAppShell>
   );
 }

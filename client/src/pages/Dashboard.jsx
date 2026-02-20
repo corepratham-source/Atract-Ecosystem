@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import Snapshot from "../components/Snapshot";
 import AppTable from "../components/AppTable";
 import LeftSidebar from "../components/LeftSidebar";
 import { microApps } from "../data/microApps";
 import { API_BASE } from "../config/api";
+import { getStoredUser, STORAGE_KEY } from "../components/ProtectedRoute";
 const API_URL = `${API_BASE}/apps`;
 
 const FETCH_TIMEOUT_MS = 6000;
@@ -31,6 +33,8 @@ const dashboardApp = {
 };
 
 export default function Dashboard({ isPro = false }) {
+  const navigate = useNavigate();
+  const user = getStoredUser();
   const [apps, setApps] = useState(getFallbackApps());
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState(null);
@@ -168,13 +172,29 @@ export default function Dashboard({ isPro = false }) {
                   {fetchError}
                 </span>
               )}
+              {user && (
+                <span className="text-sm text-slate-600">
+                  <span className="font-medium text-slate-800">Admin</span>
+                  {user.name && <span className="ml-1">· {user.name}</span>}
+                </span>
+              )}
               <button
-              type="button"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 text-sm font-semibold"
-            >
-              {showAddForm ? "Close" : "+ Add App"}
-            </button>
+                type="button"
+                onClick={() => setShowAddForm(!showAddForm)}
+                className="px-4 py-2 bg-slate-900 text-white rounded-xl hover:bg-slate-800 text-sm font-semibold"
+              >
+                {showAddForm ? "Close" : "+ Add App"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.removeItem(STORAGE_KEY);
+                  navigate("/login", { replace: true });
+                }}
+                className="px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition-colors"
+              >
+                Logout
+              </button>
             </div>
           </div>
 
