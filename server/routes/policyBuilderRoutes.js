@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
 const policyTypes = [
   { id: "leave", name: "Leave Policy", icon: "🏖️" },
@@ -1138,7 +1139,7 @@ const policyGenerators = {
   grievance: getGrievancePolicy,
 };
 
-router.post("/generate", (req, res) => {
+router.post("/generate", async (req, res) => {
   try {
     const form = req.body;
     const policyType = form.policyType || "leave";
@@ -1148,9 +1149,47 @@ router.post("/generate", (req, res) => {
       return res.status(400).json({ error: "Invalid policy type" });
     }
 
-    const policy = generator(form);
+    // Generate a strong template policy first
+    const basePolicy = generator(form);
+
+    // Try to refine using Groq so tone/structure match selected tone & company details
+    let finalPolicy = basePolicy;
+    try {
+      const tone = form.tone || "formal";
+      const toneLabel =
+        tone === "warm" ? "warm and people-friendly" :
+        tone === "neutral" ? "balanced and neutral" :
+        "formal and compliance-focused";
+
+      const prompt = `You are an expert HR policy writer.
+
+Rewrite and lightly restructure the following ${policyTypes.find(p => p.id === policyType)?.name || "HR"} policy for the company "${
+        form.companyName || "[Company Name]"
+      }" so that it is clear, consistent, and ${toneLabel}.
+
+RULES:
+- Keep all legal and compliance clauses intact
+- Preserve all headings and sections
+- Do NOT shorten the document aggressively; only tighten language where helpful
+- Keep the output as plain text (no Markdown, no bullets beyond simple text)
+
+Original policy text:
+${basePolicy}`;
+
+      const aiText = await completeWithGroq(
+        prompt,
+        "You draft legally sound HR policies in clear plain English.",
+        { max_tokens: 1600 }
+      );
+
+      if (aiText && typeof aiText === "string" && aiText.trim().length > 100) {
+        finalPolicy = aiText.trim();
+      }
+    } catch (aiErr) {
+      console.warn("Groq HR policy refinement failed, using template text:", aiErr.message);
+    }
     
-    res.json({ policy });
+    res.json({ policy: finalPolicy });
   } catch (err) {
     console.error("Policy generation error:", err);
     res.status(500).json({ error: err.message || "Failed to generate policy" });

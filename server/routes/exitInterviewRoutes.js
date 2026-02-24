@@ -1,15 +1,29 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
-router.post("/analyze", (req, res) => {
+router.post("/analyze", async (req, res) => {
   try {
     const { employeeName, department, role, tenure, exitDate, reason, notes, manager } = req.body;
     
-    if (!notes || typeof notes !== "string") {
-      return res.status(400).json({ error: "Notes are required" });
+    // Build a combined text source from all available fields.
+    // "notes" is now optional – we also use reason, department, role, tenure and manager.
+    const combinedText = [
+      notes || "",
+      reason || "",
+      department || "",
+      role || "",
+      tenure || "",
+      manager || "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    if (!combinedText.trim()) {
+      return res.status(400).json({ error: "No feedback text provided for analysis" });
     }
 
-    const text = notes.toLowerCase();
+    const text = combinedText.toLowerCase();
     const themes = [];
     const keywords = [];
 
@@ -160,6 +174,38 @@ router.post("/analyze", (req, res) => {
       actions.push({ priority: "Low", action: "Analyze exit trends across departments", timeline: "Quarterly" });
     }
 
+    // Optional Groq-powered narrative summary for the HR team
+    let narrative = "";
+    try {
+      const prompt = `You are an HR analytics expert.
+
+Based on the following exit interview signals, write a short narrative (1–2 paragraphs) explaining why this employee left and what HR should focus on.
+
+Employee: ${employeeName || "N/A"}
+Department: ${department || "N/A"}
+Role: ${role || "N/A"}
+Tenure: ${tenure || "N/A"}
+Primary reason: ${reason || "N/A"}
+Manager: ${manager || "N/A"}
+Detected themes: ${themes.join(", ") || "None"}
+Sentiment: ${sentiment}
+Retention risk level for similar employees: ${retentionRisk}
+
+Write in plain text, professional but easy to understand. Do not add headings.`;
+
+      const aiText = await completeWithGroq(
+        prompt,
+        "You summarize exit interviews into clear, actionable insights for HR leaders.",
+        { max_tokens: 500 }
+      );
+
+      if (aiText && typeof aiText === "string" && aiText.trim().length > 50) {
+        narrative = aiText.trim();
+      }
+    } catch (aiErr) {
+      console.warn("Groq exit interview narrative failed, falling back to heuristic only:", aiErr.message);
+    }
+
     res.json({
       themes: themes.length ? [...new Set(themes)] : ["No clear repeating patterns found"],
       sentiment,
@@ -172,6 +218,7 @@ router.post("/analyze", (req, res) => {
       role,
       tenure,
       exitReason: reason,
+      narrative,
     });
   } catch (err) {
     console.error("Exit interview analysis error:", err);

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 import { API_BASE } from "../config/api";
 
@@ -33,6 +33,7 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [trialCount, setTrialCount] = useState(0);
   const [isPaid, setIsPaid] = useState(false);
+  const [activeTab, setActiveTab] = useState("input");
 
   useEffect(() => {
     const stored = sessionStorage.getItem("offerLetterTrials");
@@ -72,6 +73,7 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to generate letter");
       setOutput(data.letter || data.output || "");
+      setActiveTab("results");
       if (!isPaid) updateTrialCount(trialCount + 1);
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -179,34 +181,119 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
   };
 
   return (
-    <CustomerMicroAppShell app={app}>
-      <div className="max-w-5xl mx-auto">
-        {/* Main Card */}
-        <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          <div className="flex-1 flex flex-col divide-y divide-slate-200">
-            {/* Header */}
-            <div className="px-6 py-4 sm:px-8 sm:py-6 bg-gradient-to-r from-purple-50 to-pink-50">
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Offer Letter Generator</h2>
-                <p className="text-slate-600 mt-1">Create professional offer letters in seconds.</p>
-                {!isPaid && (
-                  <p className="text-sm text-amber-600 mt-2 font-medium">
-                    Free trials remaining: {MAX_FREE_TRIALS - trialCount}/{MAX_FREE_TRIALS}
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen overflow-y-auto">
+        <div className="max-w-5xl mx-auto p-6">
+          {/* Payment Modal */}
+          {showPaymentModal && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
+                <div className="p-6 text-center border-b border-gray-200">
+                  <div className="text-3xl mb-2">🔒</div>
+                  <h2 className="text-2xl font-bold text-gray-900">Free Trials Used</h2>
+                  <p className="text-gray-600 mt-1">Upgrade to continue generating offer letters.</p>
+                </div>
+
+                <div className="p-6 space-y-4">
+                  <div className="border-2 border-purple-200 rounded-xl p-4 hover:border-purple-400 transition-all">
+                    <h3 className="text-lg font-bold text-purple-900 mb-1">Basic Plan</h3>
+                    <div className="text-2xl font-bold text-purple-700">₹99 per letter</div>
+                    <button
+                      onClick={() => handlePayment("letter_basic")}
+                      className="w-full mt-4 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
+                    >
+                      Upgrade Now
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-gray-50 text-center border-t">
+                  <button
+                    onClick={() => setShowPaymentModal(false)}
+                    className="text-gray-500 hover:text-gray-700 font-medium text-sm"
+                  >
+                    Maybe later
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Sticky Header - App name at top of right side */}
+          <div className="flex-shrink-0 sticky top-0 z-10 bg-gray-100 pb-3 pt-2 border-b border-gray-200">
+            <div className="px-1 sm:px-0 flex items-center justify-between gap-4">
+              <div className="min-w-0 text-right flex-1">
+                <h1 className="text-base sm:text-lg lg:text-2xl font-bold text-gray-900 truncate">
+                  {app?.name || "Offer Letter Generator"}
+                </h1>
+                {(app?.valueProposition || defaultApp.valueProposition) && (
+                  <p className="text-xs text-gray-500 truncate hidden sm:block">
+                    {app?.valueProposition || defaultApp.valueProposition}
                   </p>
                 )}
               </div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl" role="img" aria-label={app?.name || "Offer Letter Generator"}>
+                  {app?.icon || "📄"}
+                </span>
+                {isPaid && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                    Pro
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
 
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 sm:p-8">
-                  {/* Input Section */}
+          {/* Tabs */}
+          <div className="flex gap-2 mb-4 lg:mb-6 overflow-x-auto pb-2">
+            <button
+              onClick={() => setActiveTab("input")}
+              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+                activeTab === "input"
+                  ? "bg-purple-500 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              📝 Create Letter
+            </button>
+            <button
+              onClick={() => setActiveTab("results")}
+              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+                activeTab === "results"
+                  ? "bg-purple-500 text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+              }`}
+              disabled={!output}
+            >
+              📄 Results {output ? "" : "(0)"}
+            </button>
+          </div>
+
+          {/* Tab Panels */}
+          {activeTab === "input" && (
+            <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex-1 flex flex-col divide-y divide-slate-200">
+                {/* Header */}
+                <div className="px-6 py-4 sm:px-8 sm:py-6 bg-gradient-to-r from-purple-50 to-pink-50">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Offer Letter Details</h2>
+                  <p className="text-slate-600 mt-1">Create professional offer letters in seconds.</p>
+                  {!isPaid && (
+                    <p className="text-sm text-amber-600 mt-2 font-medium">
+                      Free trials remaining: {MAX_FREE_TRIALS - trialCount}/{MAX_FREE_TRIALS}
+                    </p>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto p-6 sm:p-8">
                   <div className="space-y-6">
                     {error && (
                       <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                         {error}
                       </div>
                     )}
-
-                    {/* Header moved to navbar (MicroAppRightLayout) */}
 
                     <Field label="Company">
                       <input
@@ -322,77 +409,47 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
                       {isLoading ? "Generating..." : "✍️ Generate Letter"}
                     </button>
                   </div>
-
-                  {/* Output Section */}
-                  <div className="space-y-4">
-                    {!output ? (
-                      <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 text-center border border-purple-200 h-full flex flex-col justify-center min-h-[400px]">
-                        <div className="text-5xl mb-4">📄</div>
-                        <h3 className="text-xl font-bold text-slate-900 mb-2">Generated Letter</h3>
-                        <p className="text-slate-600">Fill details on the left and click Generate to create your professional offer letter.</p>
-                      </div>
-                    ) : (
-                      <div className="bg-white rounded-2xl p-6 border border-slate-200 h-full flex flex-col min-h-[400px]">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-bold text-slate-900">Offer Letter Preview</h3>
-                          <button
-                            onClick={downloadLetter}
-                            className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-all"
-                          >
-                            ⬇️ Download
-                          </button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto bg-slate-50 p-6 rounded-xl border border-slate-200 whitespace-pre-wrap text-sm leading-relaxed font-mono text-slate-700">
-                          {output}
-                        </div>
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* Results Tab */}
+          {activeTab === "results" && (
+            <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="p-6 sm:p-8">
+                {!output ? (
+                  <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-2xl p-8 text-center border border-purple-200 h-full flex flex-col justify-center min-h-[400px]">
+                    <div className="text-5xl mb-4">📄</div>
+                    <h3 className="text-xl font-bold text-slate-900 mb-2">No Letter Generated</h3>
+                    <p className="text-slate-600">Fill details in the Create Letter tab and click Generate to create your professional offer letter.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-xl font-bold text-slate-900">Offer Letter Preview</h3>
+                      <button
+                        onClick={downloadLetter}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg text-sm font-semibold hover:bg-purple-700 transition-all"
+                      >
+                        ⬇️ Download
+                      </button>
+                    </div>
+                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 whitespace-pre-wrap text-sm leading-relaxed font-mono text-slate-700">
+                      {output}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Pricing Info */}
           <div className="mt-6 px-6 py-4 bg-slate-50 border border-slate-200 rounded-2xl text-sm text-slate-600 text-center">
-            Pricing: <span className="font-semibold text-slate-900">{app.pricing}</span>
+            Pricing: <span className="font-semibold text-slate-900">{app?.pricing || "₹199 per letter"}</span>
           </div>
         </div>
-
-        {/* Payment Modal */}
-        {showPaymentModal && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-              <div className="p-6 text-center border-b border-gray-200">
-                <div className="text-3xl mb-2">🔒</div>
-                <h2 className="text-2xl font-bold text-gray-900">Free Trials Used</h2>
-                <p className="text-gray-600 mt-1">Upgrade to continue generating offer letters.</p>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="border-2 border-purple-200 rounded-xl p-4 hover:border-purple-400 transition-all">
-                  <h3 className="text-lg font-bold text-purple-900 mb-1">Basic Plan</h3>
-                  <div className="text-2xl font-bold text-purple-700">₹99 per letter</div>
-                  <button
-                    onClick={() => handlePayment("letter_basic")}
-                    className="w-full mt-4 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700"
-                  >
-                    Upgrade Now
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 text-center border-t">
-                <button
-                  onClick={() => setShowPaymentModal(false)}
-                  className="text-gray-500 hover:text-gray-700 font-medium text-sm"
-                >
-                  Maybe later
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-    </CustomerMicroAppShell>
+      </div>
+    </div>
   );
 }

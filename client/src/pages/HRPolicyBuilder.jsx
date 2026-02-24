@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 
 import { API_BASE } from "../config/api";
@@ -62,6 +62,7 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
   const [error, setError] = useState("");
   const [trialCount, setTrialCount] = useState(0);
   const [isPaid, setIsPaid] = useState(false);
+  const [activeTab, setActiveTab] = useState("input"); // "input" | "results"
 
   useEffect(() => {
     const stored = sessionStorage.getItem("hrPolicyTrials");
@@ -102,6 +103,7 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
       if (!res.ok) throw new Error(data.error || "Failed to generate");
       setOutput(data.policy);
       setGenerated(true);
+      setActiveTab("results");
       if (!isPaid) updateTrialCount(trialCount + 1);
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -230,9 +232,11 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
   const selectedPolicy = policyTypes.find(p => p.id === form.policyType);
 
   return (
-    <CustomerMicroAppShell app={app}>
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen overflow-y-auto flex flex-col">
       {/* Fixed Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-white border-b border-gray-200 px-6 py-4 flex-shrink-0">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">HR Policy Builder</h1>
@@ -246,12 +250,38 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
         </div>
       </div>
 
+        {/* Tabs */}
+        <div className="flex gap-2 px-6 pt-4 overflow-x-auto pb-2">
+          <button
+            onClick={() => setActiveTab("input")}
+            className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+              activeTab === "input"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            📝 Configure Policy
+          </button>
+          <button
+            onClick={() => setActiveTab("results")}
+            className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+              activeTab === "results"
+                ? "bg-slate-900 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+            }`}
+            disabled={!generated}
+          >
+            📄 Policy Document {generated ? "" : "(0)"}
+          </button>
+        </div>
+
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               
               {/* Input Section */}
+              {activeTab === "input" && (
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
                 <SectionTitle
                   title="Company & Policy Details"
@@ -426,8 +456,10 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
                   </p>
                 </div>
               </div>
+              )}
 
               {/* Output Section */}
+              {activeTab === "results" && (
               <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6">
                 <SectionTitle
                   title="Generated Policy Document"
@@ -474,6 +506,7 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
                   </>
                 )}
               </div>
+              )}
             </div>
           </div>
         </div>
@@ -531,6 +564,7 @@ export default function HRPolicyBuilder({ app = defaultApp }) {
           </div>
         </div>
       )}
-    </CustomerMicroAppShell>
+      </div>
+    </div>
   );
 }

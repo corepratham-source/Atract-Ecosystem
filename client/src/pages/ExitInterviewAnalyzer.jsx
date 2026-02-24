@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import MonetizationCard from "../components/MonetizationCard";
 import SectionTitle from "../components/SectionTitle";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
@@ -37,7 +37,6 @@ export default function ExitInterviewAnalyzer({ app }) {
     tenure: "",
     exitDate: "",
     reason: "Resignation",
-    notes: "",
     manager: "",
   });
   const [analysis, setAnalysis] = useState(null);
@@ -169,8 +168,8 @@ export default function ExitInterviewAnalyzer({ app }) {
   };
 
   const analyze = async () => {
-    if (!form.notes.trim() && !form.employeeName.trim()) {
-      setError("Please enter employee details and notes");
+    if (!form.employeeName.trim()) {
+      setError("Please enter employee details");
       return;
     }
 
@@ -225,10 +224,9 @@ export default function ExitInterviewAnalyzer({ app }) {
   };
 
   return (
-    <CustomerMicroAppShell app={app}>
-      {/* Header moved to navbar (CustomerMicroAppShell) */}
-
-      {/* Scrollable Content */}
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen overflow-y-auto">
       <div className="p-6 max-w-6xl mx-auto">
         {/* Payment Modal */}
         {showPayment && (
@@ -375,26 +373,16 @@ export default function ExitInterviewAnalyzer({ app }) {
                 </div>
               </div>
 
-              {/* Notes Input Card */}
+              {/* Analyze Button */}
               <div className="bg-white rounded-2xl shadow-sm p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-2">Exit Interview Notes</h2>
-                <p className="text-sm text-gray-500 mb-4">Paste exit interview transcript or notes here for AI analysis</p>
-                
-                <textarea
-                  value={form.notes}
-                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full min-h-[150px] rounded-xl border border-gray-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Paste exit interview notes here. Include reasons mentioned, feedback about management, work environment, growth opportunities, compensation concerns, etc..."
-                />
-
                 {error && (
-                  <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                   </div>
                 )}
 
                 {!isPaid && (
-                  <div className="mt-4 bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
+                  <div className="mb-4 bg-indigo-50/60 border border-indigo-100 rounded-xl p-3">
                     <div className="flex justify-between text-sm mb-1">
                       <span className="font-medium text-indigo-800">Free Trial {trialCount}/{MAX_FREE_TRIALS}</span>
                     </div>
@@ -407,12 +395,12 @@ export default function ExitInterviewAnalyzer({ app }) {
                   </div>
                 )}
 
-                <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center justify-between">
                   <button
                     onClick={analyze}
-                    disabled={!form.notes.trim() || isProcessing}
+                    disabled={!form.employeeName.trim() || isProcessing}
                     className={`px-6 py-3 rounded-xl font-semibold transition-all ${
-                      form.notes.trim() && !isProcessing
+                      form.employeeName.trim() && !isProcessing
                         ? "bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:opacity-90 shadow-md"
                         : "bg-gray-200 text-gray-500 cursor-not-allowed"
                     }`}
@@ -471,6 +459,16 @@ ${analysis.actions.map(a => `[${a.priority}] ${a.action} (${a.timeline})`).join(
                     <h2 className="text-lg font-semibold text-gray-900">Analysis Results</h2>
                     <span className="text-xs text-gray-500">{analysis.generatedAt}</span>
                   </div>
+
+                  {/* Optional AI narrative from Groq */}
+                  {analysis.narrative && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4 mb-6">
+                      <h3 className="text-sm font-semibold text-indigo-900 mb-2">AI Summary</h3>
+                      <p className="text-sm text-indigo-800 whitespace-pre-wrap">
+                        {analysis.narrative}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Employee Summary */}
                   <div className="bg-gray-50 rounded-xl p-4 mb-6">
@@ -583,7 +581,7 @@ ${analysis.actions.map(a => `[${a.priority}] ${a.action} (${a.timeline})`).join(
                 <ol className="space-y-3 text-sm text-gray-600">
                   <li className="flex items-start gap-2">
                     <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">1</span>
-                    <span>Enter employee details and exit interview notes</span>
+                    <span>Enter employee details and exit interview responses</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="flex-shrink-0 w-5 h-5 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-xs font-bold">2</span>
@@ -610,6 +608,7 @@ ${analysis.actions.map(a => `[${a.priority}] ${a.action} (${a.timeline})`).join(
             </div>
           </div>
         </div>
-    </CustomerMicroAppShell>
+      </div>
+    </div>
   );
 }

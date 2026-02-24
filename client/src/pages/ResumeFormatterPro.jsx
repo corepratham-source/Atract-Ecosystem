@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import MonetizationCard from "../components/MonetizationCard";
 import mammoth from "mammoth";
 import { API_BASE } from "../config/api";
@@ -532,8 +532,10 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
   };
 
   return (
-    <CustomerMicroAppShell app={app}>
-      <div className="max-w-5xl mx-auto w-full">
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen overflow-y-auto">
+      <div className="max-w-5xl mx-auto w-full p-6">
         {/* Payment Modal */}
         {showPayment && (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 backdrop-blur-sm">
@@ -969,8 +971,8 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
                   )}
                 </div>
 
-                {/* A4 Resume Preview - Vertical Scroll Only */}
-                <div className="bg-gray-200 rounded-xl p-2 lg:p-4 overflow-x-hidden max-h-[calc(150vh-100px)] lg:max-h-[calc(150vh-100px)] border border-gray-300">
+                {/* Resume Preview - clean ATS-friendly layout similar to sample */}
+                <div className="bg-gray-100 rounded-xl p-3 lg:p-4 overflow-x-hidden max-h-[calc(150vh-100px)] lg:max-h-[calc(150vh-100px)]">
                   {!formattedResume ? (
                     <div className="flex flex-col items-center justify-center text-gray-400" style={{ width: '100%', minHeight: '1100px', background: 'white' }}>
                       <div className="w-12 h-12 lg:w-16 lg:h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-3 mt-8 lg:mt-32">
@@ -982,101 +984,90 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
                       <p className="text-xs lg:text-sm text-center px-4">Fill in your details and click "Generate" to create your ATS-optimized resume</p>
                     </div>
                   ) : (
-                    <div className="mx-auto shadow-lg bg-white" style={{ width: '100%', maxWidth: '800px', minHeight: '1100px' }}>
-                      {/* Resume Header */}
-                      <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-4 lg:px-8 py-4 lg:py-6 text-white">
-                        <h1 className="text-lg lg:text-2xl font-bold font-serif tracking-wide">{targetRole || "Professional Resume"}</h1>
-                        <p className="text-slate-300 text-xs lg:text-sm mt-1">{targetCompany ? `Targeting: ${targetCompany}` : "ATS-Optimized"}</p>
-                        <div className="flex flex-wrap gap-2 lg:gap-4 mt-3 lg:mt-4 text-xs text-slate-300">
-                          {industry && <span>📍 {industry}</span>}
-                          {seniority && <span>💼 {seniority}</span>}
-                          <span>📄 Resume</span>
-                        </div>
-                      </div>
-                      
-                      {/* Resume Body */}
-                      <div className="px-4 lg:px-8 py-4 lg:py-5 space-y-3 lg:space-y-4 text-xs lg:text-[10pt] text-slate-800 font-sans leading-relaxed">
-                        {skills && (
-                          <div className="mb-3 lg:mb-4">
-                            <h3 className="text-xs lg:text-sm font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-800 pb-1 mb-2">
-                              Key Skills
-                            </h3>
-                            <p className="text-slate-700">{skills}</p>
-                          </div>
+                    <div
+                      className="mx-auto bg-white shadow-sm"
+                      style={{ width: "100%", maxWidth: "800px", minHeight: "1100px", padding: "40px 48px" }}
+                    >
+                      {/* Simple header like sample resume */}
+                      <div className="text-center mb-4">
+                        <h1 className="text-2xl lg:text-3xl font-bold tracking-[0.2em] uppercase text-gray-900">
+                          {(uploadedFileName || "").replace(/\.[^.]+$/, "") || "Your Name"}
+                        </h1>
+                        <p className="mt-2 text-xs lg:text-sm text-gray-700">
+                          {targetRole || "Professional Summary"}{industry ? ` | ${industry}` : ""}{seniority ? ` | ${seniority}` : ""}
+                        </p>
+                        {targetCompany && (
+                          <p className="mt-1 text-xs text-gray-500">
+                            Targeting: {targetCompany}
+                          </p>
                         )}
-                        
+                      </div>
+
+                      <div className="mt-4 space-y-4 text-xs lg:text-[10pt] text-gray-800 leading-relaxed">
+                        {skills && (
+                          <section>
+                            <h3 className="text-xs lg:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-1">
+                              Skills
+                            </h3>
+                            <p>{skills}</p>
+                          </section>
+                        )}
+
                         {experience && (
-                          <div className="mb-3 lg:mb-4">
-                            <h3 className="text-xs lg:text-sm font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-800 pb-1 mb-2">
+                          <section>
+                            <h3 className="text-xs lg:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-1">
                               Work Experience
                             </h3>
-                            <div className="space-y-2 lg:space-y-3">
-                              {experience.split('\n').filter(line => line.trim()).map((exp, idx) => (
-                                <p key={idx} className="text-slate-700 text-justify">{exp}</p>
-                              ))}
+                            <div className="space-y-2">
+                              {experience
+                                .split("\n")
+                                .filter((line) => line.trim())
+                                .map((exp, idx) => (
+                                  <p key={idx}>{exp}</p>
+                                ))}
                             </div>
-                          </div>
+                          </section>
                         )}
-                        
+
                         {education && (
-                          <div className="mb-3 lg:mb-4">
-                            <h3 className="text-xs lg:text-sm font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-800 pb-1 mb-2">
+                          <section>
+                            <h3 className="text-xs lg:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-1">
                               Education
                             </h3>
-                            <div className="space-y-1 lg:space-y-2">
-                              {education.split('\n').filter(line => line.trim()).map((edu, idx) => (
-                                <p key={idx} className="text-slate-700">{edu}</p>
-                              ))}
+                            <div className="space-y-1">
+                              {education
+                                .split("\n")
+                                .filter((line) => line.trim())
+                                .map((edu, idx) => (
+                                  <p key={idx}>{edu}</p>
+                                ))}
                             </div>
-                          </div>
+                          </section>
                         )}
-                        
+
                         {achievements && (
-                          <div className="mb-3 lg:mb-4">
-                            <h3 className="text-xs lg:text-sm font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-800 pb-1 mb-2">
-                              Key Achievements
+                          <section>
+                            <h3 className="text-xs lg:text-sm font-semibold text-gray-900 uppercase tracking-wide mb-1">
+                              Achievements
                             </h3>
-                            <div className="space-y-1 lg:space-y-2">
-                              {achievements.split('\n').filter(line => line.trim()).map((ach, idx) => (
-                                <p key={idx} className="text-slate-700 text-justify">{ach}</p>
-                              ))}
+                            <div className="space-y-1">
+                              {achievements
+                                .split("\n")
+                                .filter((line) => line.trim())
+                                .map((ach, idx) => (
+                                  <p key={idx}>{ach}</p>
+                                ))}
                             </div>
-                          </div>
+                          </section>
                         )}
-                        
-                        {formattedResume.split('\n').filter(line => line.trim()).map((line, idx) => {
-                          const lower = line.toLowerCase();
-                          if (lower.includes('skills') || lower.includes('experience') || 
-                              lower.includes('education') || lower.includes('achievement') ||
-                              lower.includes('key skills') || lower.includes('work experience')) {
-                            return null;
-                          }
-                          
-                          if (line.toUpperCase() === line && line.length > 3 && line.length < 50) {
-                            return (
-                              <div key={`header-${idx}`} className="mb-4">
-                                <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide border-b-2 border-slate-800 pb-1 mb-2">
-                                  {line}
-                                </h3>
-                              </div>
-                            );
-                          }
-                          
-                          if (line.trim()) {
-                            return (
-                              <p key={idx} className="text-slate-700 text-justify">{line}</p>
-                            );
-                          }
-                          return null;
-                        })}
-                      </div>
-                      
-                      {/* Resume Footer */}
-                      <div className="bg-slate-100 px-4 lg:px-8 py-2 border-t border-slate-300">
-                        <div className="flex flex-col lg:flex-row justify-between items-center text-[8pt] lg:text-[9pt] text-slate-500 gap-1">
-                          <p>Generated by ATRact Resume Formatter</p>
-                          <p className="font-medium uppercase tracking-wider">ATS-Optimized</p>
-                        </div>
+
+                        {/* Remaining Groq-generated content, without extra borders */}
+                        {formattedResume
+                          .split("\n")
+                          .filter((line) => line.trim())
+                          .map((line, idx) => (
+                            <p key={idx}>{line}</p>
+                          ))}
                       </div>
                     </div>
                   )}
@@ -1150,6 +1141,7 @@ export default function ResumeFormatterPro({ app, isPro = false }) {
           </div>
         )}
       </div>
-    </CustomerMicroAppShell>
+      </div>
+    </div>
   );
 }

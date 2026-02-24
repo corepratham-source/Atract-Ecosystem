@@ -1,10 +1,25 @@
 const express = require("express");
 const router = express.Router();
+const { completeWithGroq } = require("../utils/groq");
 
-router.post("/analyze", (req, res) => {
+router.post("/generate", async (req, res) => {
   try {
-    const { selfReview = "", managerFeedback = "" } = req.body;
-    const text = (selfReview + " " + managerFeedback).toLowerCase();
+    // Extract client form fields
+    const { 
+      employeeName = "", 
+      role = "", 
+      ratingPeriod = "", 
+      performanceArea = "",
+      strengths = "", 
+      areasToImprove = "", 
+      rating = "",
+      feedback = "",
+      selfReview = "",
+      managerFeedback = "" 
+    } = req.body;
+    
+    // Combine text for analysis
+    const text = (strengths + " " + areasToImprove + " " + feedback + " " + selfReview + " " + managerFeedback).toLowerCase();
 
     const positives = ["exceeded", "outstanding", "great", "excellent", "improved", "delivered", "led", "innovat", "collaborat", "proactive", "initiative", "strong", "impact", "successful"];
     const concerns = ["improve", "need to", "lack", "missed", "delay", "quality issue", "dependen", "communication", "prioritiz", "struggling", "challenges", "below expectations"];
@@ -49,7 +64,83 @@ router.post("/analyze", (req, res) => {
     const promotionEligible = positiveCount > concernCount + 3;
     const bonusEligible = positiveCount > concernCount;
 
+    // Format the review as a text string for the client
+    const reviewText = `PERFORMANCE REVIEW
+========================
+
+Employee: ${employeeName || "N/A"}
+Role: ${role || "N/A"}
+Period: ${ratingPeriod || "N/A"}
+Performance Area: ${performanceArea || "N/A"}
+Rating: ${rating || "N/A"}/5
+
+OVERALL ASSESSMENT
+------------------------
+Overall Tone: ${overallTone}
+Estimated Rating: ${estimatedRating}/5
+
+KEY STRENGTHS (${positiveCount} detected)
+------------------------
+${strengths || "No specific strengths mentioned"}
+
+Themes detected:
+${themes.slice(0, 3).map((t) => `- ${t}`).join("\n") || "No specific themes detected"}
+
+AREAS FOR DEVELOPMENT
+------------------------
+${areasToImprove || "No specific areas mentioned"}
+${concernCount > 0 ? "\nOpportunities for improvement identified in key areas." : ""}
+
+SUGGESTED SUMMARY
+------------------------
+${summaryPoints.join("\n")}
+
+NEXT STEPS
+------------------------
+${nextSteps.map((ns) => `• [${ns.type}] ${ns.action}`).join("\n")}
+
+ELIGIBILITY
+------------------------
+Promotion Eligible: ${promotionEligible ? "Yes" : "Not at this time"}
+Bonus Eligible: ${bonusEligible ? "Yes" : "Not at this time"}
+
+Generated: ${new Date().toLocaleString()}`;
+
+    // Try to refine the review using Groq for more natural language
+    let finalReview = reviewText;
+    try {
+      const prompt = `You are an experienced HR manager. Rewrite the following performance review so it is clear, professional, and concise while keeping all key points and ratings the same.
+
+Return only the final review text.
+
+Structured input:
+Employee name: ${employeeName || "N/A"}
+Role: ${role || "N/A"}
+Rating period: ${ratingPeriod || "N/A"}
+Performance area: ${performanceArea || "N/A"}
+Overall tone: ${overallTone}
+Estimated rating: ${estimatedRating}/5
+
+Original review:
+${reviewText}`;
+
+      const aiText = await completeWithGroq(
+        prompt,
+        "You write formal but friendly performance review summaries for HR teams.",
+        { max_tokens: 800 }
+      );
+
+      if (aiText && typeof aiText === "string" && aiText.trim().length > 50) {
+        finalReview = aiText.trim();
+      }
+    } catch (aiErr) {
+      console.warn("Groq performance review refinement failed, using heuristic text:", aiErr.message);
+    }
+
     res.json({
+      review: finalReview,
+      output: finalReview,
+      // Also include structured data
       overallTone,
       strengthCount: positiveCount,
       concernCount,

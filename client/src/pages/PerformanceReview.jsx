@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 import { API_BASE } from "../config/api";
 
@@ -33,6 +33,8 @@ export default function PerformanceReview({ app = defaultApp }) {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [trialCount, setTrialCount] = useState(0);
   const [isPaid, setIsPaid] = useState(false);
+  const [paymentLoading, setPaymentLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("input"); // 'input' or 'results'
 
   useEffect(() => {
     const stored = sessionStorage.getItem("performanceReviewTrials");
@@ -70,15 +72,35 @@ export default function PerformanceReview({ app = defaultApp }) {
         body: JSON.stringify(form),
       });
       const data = await res.json();
+      console.log("Review response:", data);
       if (!res.ok) throw new Error(data.error || "Failed to generate review");
-      setOutput(data.review || data.output);
+      
+      // Use structured data to create a nice display
+      if (data.review || data.output) {
+        setOutput(data.review || data.output);
+      } else if (data.overallTone) {
+        // Format the structured data as a nice text review
+        const formatted = formatReviewAsText(data, form);
+        setOutput(formatted);
+      } else {
+        setOutput(JSON.stringify(data, null, 2));
+      }
+      
+      setActiveTab("results"); // Switch to results tab
+      
       if (!isPaid) updateTrialCount(trialCount + 1);
     } catch (err) {
+      console.error("Generate review error:", err);
       setError(err.message || "Something went wrong");
       setOutput("");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Helper function to format structured data as text
+  const formatReviewAsText = (data, form) => {
+    return `PERFORMANCE REVIEW\n========================\n\nEmployee: ${form.employeeName || 'N/A'}\nRole: ${form.role || 'N/A'}\nPeriod: ${form.ratingPeriod || 'N/A'}\nPerformance Area: ${form.performanceArea || 'N/A'}\nRating: ${form.rating || 'N/A'}/5\n\nOVERALL ASSESSMENT\n------------------------\nOverall Tone: ${data.overallTone || 'N/A'}\nEstimated Rating: ${data.estimatedRating || 'N/A'}/5\n\nKEY STRENGTHS\n------------------------\n${form.strengths || 'No specific strengths mentioned'}\n\nAREAS FOR DEVELOPMENT\n------------------------\n${form.areasToImprove || 'No specific areas mentioned'}\n\nSUGGESTED SUMMARY\n------------------------\n${Array.isArray(data.suggestedSummary) ? data.suggestedSummary.join('\n') : data.suggestedSummary}\n\nNEXT STEPS\n------------------------\n${Array.isArray(data.nextSteps) ? data.nextSteps.map(ns => `• [${ns.type}] ${ns.action}`).join('\n') : 'N/A'}\n\nELIGIBILITY\n------------------------\nPromotion Eligible: ${data.promotionEligible ? 'Yes' : 'Not at this time'}\nBonus Eligible: ${data.bonusEligible ? 'Yes' : 'Not at this time'}\n\nGenerated: ${data.generatedAt || new Date().toLocaleString()}`;
   };
 
   const handlePayment = async (plan) => {
@@ -101,11 +123,13 @@ export default function PerformanceReview({ app = defaultApp }) {
         } else {
           setError(data.error || "Failed to create order");
         }
+        setPaymentLoading(false);
         return;
       }
       await loadRazorpayScript();
       if (!window.Razorpay) {
         setError("Payment script failed to load");
+        setPaymentLoading(false);
         return;
       }
       const options = {
@@ -183,206 +207,277 @@ export default function PerformanceReview({ app = defaultApp }) {
   };
 
   return (
-    <CustomerMicroAppShell app={app}>
-      <div className="max-w-5xl mx-auto">
-          <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="flex-1 flex flex-col divide-y divide-slate-200">
-              {/* Header */}
-              <div className="px-6 py-4 sm:px-8 sm:py-6 bg-gradient-to-r from-emerald-50 to-teal-50">
-                <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Performance Review Generator</h2>
-                <p className="text-slate-600 mt-1">Create thoughtful, structured performance reviews.</p>
-                {!isPaid && (
-                  <p className="text-sm text-amber-600 mt-2 font-medium">Free trials remaining: {MAX_FREE_TRIALS - trialCount}/{MAX_FREE_TRIALS}</p>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 sm:p-8">
-            {/* Input Section */}
-            <div className="space-y-6">
-              {error && (
-                <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {error}
-                </div>
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen flex flex-col">
+        {/* Sticky Header */}
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">{app.name}</h1>
+              {app.valueProposition && (
+                <p className="text-xs text-gray-500 truncate hidden sm:block">{app.valueProposition}</p>
               )}
-
-              <SectionTitle title="Review Details" description="Provide performance information" />
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <Field label="Employee Name">
-                  <input
-                    value={form.employeeName}
-                    onChange={(e) => setForm({...form, employeeName: e.target.value})}
-                    placeholder="e.g. Sarah Johnson"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                  />
-                </Field>
-                <Field label="Job Role">
-                  <input
-                    value={form.role}
-                    onChange={(e) => setForm({...form, role: e.target.value})}
-                    placeholder="e.g. Senior Developer"
-                    className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                  />
-                </Field>
-              </div>
-
-              <Field label="Rating Period">
-                <input
-                  value={form.ratingPeriod}
-                  onChange={(e) => setForm({...form, ratingPeriod: e.target.value})}
-                  placeholder="e.g. Q4 2024"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                />
-              </Field>
-
-              <Field label="Performance Area">
-                <select
-                  value={form.performanceArea}
-                  onChange={(e) => setForm({...form, performanceArea: e.target.value})}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                >
-                  <option value="Technical Skills">Technical Skills</option>
-                  <option value="Communication">Communication</option>
-                  <option value="Leadership">Leadership</option>
-                  <option value="Teamwork">Teamwork</option>
-                  <option value="Time Management">Time Management</option>
-                  <option value="Problem Solving">Problem Solving</option>
-                </select>
-              </Field>
-
-              <Field label="Key Strengths">
-                <textarea
-                  value={form.strengths}
-                  onChange={(e) => setForm({...form, strengths: e.target.value})}
-                  placeholder="e.g. Strong coding skills, good collaboration..."
-                  rows="3"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none resize-none"
-                />
-              </Field>
-
-              <Field label="Areas for Improvement">
-                <textarea
-                  value={form.areasToImprove}
-                  onChange={(e) => setForm({...form, areasToImprove: e.target.value})}
-                  placeholder="e.g. Project prioritization, public speaking..."
-                  rows="3"
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none resize-none"
-                />
-              </Field>
-
-              <Field label="Overall Rating">
-                <select
-                  value={form.rating}
-                  onChange={(e) => setForm({...form, rating: e.target.value})}
-                  className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
-                >
-                  <option value="2">Needs Improvement</option>
-                  <option value="3">Meets Expectations</option>
-                  <option value="4">Exceeds Expectations</option>
-                  <option value="5">Outstanding</option>
-                </select>
-              </Field>
-
-              {!isPaid && (
-                <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-emerald-900 text-sm">Free Trial Progress</span>
-                    <span className="text-xs font-semibold text-emerald-700">{trialCount}/{MAX_FREE_TRIALS}</span>
-                  </div>
-                  <div className="h-2 bg-emerald-200 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all"
-                      style={{ width: `${(trialCount / MAX_FREE_TRIALS) * 100}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              <button
-                onClick={handleGenerate}
-                disabled={!form.employeeName || !form.role || isLoading}
-                className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${
-                  form.employeeName && form.role && !isLoading
-                    ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg"
-                    : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                }`}
-              >
-                {isLoading ? "Generating..." : "⭐ Generate Review"}
-              </button>
             </div>
-
-            {/* Output Section */}
-            <div className="space-y-4">
-              {!output ? (
-                <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-8 text-center border border-emerald-200 h-full flex flex-col justify-center">
-                  <div className="text-5xl mb-4">📋</div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-2">Generated Review</h3>
-                  <p className="text-slate-600">Fill details on the left and click Generate to create your professional performance review.</p>
-                </div>
-              ) : (
-                <div className="bg-white rounded-lg p-6 border border-slate-200 h-full flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="font-bold text-slate-900">{form.employeeName}</h3>
-                      <p className="text-sm text-slate-600">{getRatingLabel(form.rating)}</p>
-                    </div>
-                    <button
-                      onClick={downloadReview}
-                      className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-all"
-                    >
-                      ⬇️ Download
-                    </button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto bg-slate-50 p-4 rounded-lg border border-slate-200 whitespace-pre-wrap text-sm text-slate-700">
-                    {output}
-                  </div>
-                </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" role="img" aria-label={app.name}>
+                {app.icon || '⭐'}
+              </span>
+              {isPaid && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  Pro
+                </span>
               )}
-              </div>
             </div>
           </div>
         </div>
+        
+        {/* Tabs */}
+        <div className="flex gap-2 px-6 pt-4 overflow-x-auto pb-2">
+          <button
+            onClick={() => setActiveTab("input")}
+            className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+              activeTab === "input"
+                ? "bg-emerald-500 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            📝 Create Review
+          </button>
+          <button
+            onClick={() => setActiveTab("results")}
+            className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
+              activeTab === "results"
+                ? "bg-emerald-500 text-white"
+                : "bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+            }`}
+            disabled={!output}
+          >
+            📄 Results {output ? "" : "(0)"}
+          </button>
+        </div>
+        
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-5xl mx-auto p-6">
+            <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="flex-1 flex flex-col divide-y divide-slate-200">
+                {/* Header */}
+                <div className="px-6 py-4 sm:px-8 sm:py-6 bg-gradient-to-r from-emerald-50 to-teal-50">
+                  <h2 className="text-2xl sm:text-3xl font-bold text-slate-900">Performance Review Generator</h2>
+                  <p className="text-slate-600 mt-1">Create thoughtful, structured performance reviews.</p>
+                  {!isPaid && (
+                    <p className="text-sm text-amber-600 mt-2 font-medium">Free trials remaining: {MAX_FREE_TRIALS - trialCount}/{MAX_FREE_TRIALS}</p>
+                  )}
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto">
+                  {activeTab === "input" && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 p-6 sm:p-8">
+                    {/* Input Section */}
+                    <div className="space-y-6">
+                      {error && (
+                        <div className="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                          {error}
+                        </div>
+                      )}
+
+                      <SectionTitle title="Review Details" description="Provide performance information" />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <Field label="Employee Name">
+                          <input
+                            value={form.employeeName}
+                            onChange={(e) => setForm({...form, employeeName: e.target.value})}
+                            placeholder="e.g. Sarah Johnson"
+                            className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                          />
+                        </Field>
+                        <Field label="Job Role">
+                          <input
+                            value={form.role}
+                            onChange={(e) => setForm({...form, role: e.target.value})}
+                            placeholder="e.g. Senior Developer"
+                            className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                          />
+                        </Field>
+                      </div>
+
+                      <Field label="Rating Period">
+                        <input
+                          value={form.ratingPeriod}
+                          onChange={(e) => setForm({...form, ratingPeriod: e.target.value})}
+                          placeholder="e.g. Q4 2024"
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
+
+                      <Field label="Performance Area">
+                        <select
+                          value={form.performanceArea}
+                          onChange={(e) => setForm({...form, performanceArea: e.target.value})}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        >
+                          <option value="Technical Skills">Technical Skills</option>
+                          <option value="Communication">Communication</option>
+                          <option value="Leadership">Leadership</option>
+                          <option value="Teamwork">Teamwork</option>
+                          <option value="Time Management">Time Management</option>
+                          <option value="Problem Solving">Problem Solving</option>
+                        </select>
+                      </Field>
+
+                      <Field label="Key Strengths">
+                        <textarea
+                          value={form.strengths}
+                          onChange={(e) => setForm({...form, strengths: e.target.value})}
+                          placeholder="List key strengths and achievements..."
+                          rows={3}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
+
+                      <Field label="Areas to Improve">
+                        <textarea
+                          value={form.areasToImprove}
+                          onChange={(e) => setForm({...form, areasToImprove: e.target.value})}
+                          placeholder="Areas where improvement is needed..."
+                          rows={3}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
+
+                      <Field label="Overall Rating">
+                        <select
+                          value={form.rating}
+                          onChange={(e) => setForm({...form, rating: e.target.value})}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        >
+                          <option value="2">2 - Needs Improvement</option>
+                          <option value="3">3 - Meets Expectations</option>
+                          <option value="4">4 - Exceeds Expectations</option>
+                          <option value="5">5 - Outstanding</option>
+                        </select>
+                      </Field>
+
+                      <Field label="Additional Feedback">
+                        <textarea
+                          value={form.feedback}
+                          onChange={(e) => setForm({...form, feedback: e.target.value})}
+                          placeholder="Any additional feedback..."
+                          rows={2}
+                          className="w-full rounded-lg border border-slate-300 px-4 py-3 text-base focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none"
+                        />
+                      </Field>
+
+                      {!isPaid && (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-medium text-emerald-900 text-sm">Free Trial Progress</span>
+                            <span className="text-xs font-semibold text-emerald-700">{trialCount}/{MAX_FREE_TRIALS}</span>
+                          </div>
+                          <div className="h-2 bg-emerald-200 rounded-full overflow-hidden">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full transition-all"
+                              style={{ width: `${(trialCount / MAX_FREE_TRIALS) * 100}%` }}
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      <button
+                        onClick={handleGenerate}
+                        disabled={!form.employeeName || !form.role || isLoading}
+                        className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${
+                          form.employeeName && form.role && !isLoading
+                            ? "bg-emerald-600 text-white hover:bg-emerald-700 shadow-md hover:shadow-lg"
+                            : "bg-slate-200 text-slate-500 cursor-not-allowed"
+                        }`}
+                      >
+                        {isLoading ? "Generating..." : "⭐ Generate Review"}
+                      </button>
+                    </div>
+                  )}
+
+                  {activeTab === "results" && (
+                    <div className="p-6 sm:p-8">
+                      <div className="space-y-4 min-h-[400px]">
+                        {!output ? (
+                          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-lg p-8 text-center border border-emerald-200 h-full flex flex-col justify-center">
+                            <div className="text-5xl mb-4">📋</div>
+                            <h3 className="text-xl font-bold text-slate-900 mb-2">Generated Review</h3>
+                            <p className="text-slate-600">
+                              Fill details in the Create Review tab and click Generate to create your professional performance review.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="bg-white rounded-lg p-6 border border-slate-200 h-full flex flex-col">
+                            <div className="flex items-center justify-between mb-4">
+                              <div>
+                                <h3 className="font-bold text-slate-900">{form.employeeName}</h3>
+                                <p className="text-sm text-slate-600">{getRatingLabel(form.rating)}</p>
+                              </div>
+                              <button
+                                onClick={downloadReview}
+                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700 transition-all"
+                              >
+                                ⬇️ Download
+                              </button>
+                            </div>
+                            <div className="flex-1 overflow-y-auto bg-slate-50 p-4 rounded-lg border border-slate-200 whitespace-pre-wrap text-sm text-slate-700">
+                              {output}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Pricing Info */}
         <div className="px-6 py-4 sm:px-8 sm:py-5 bg-slate-50 border-t border-slate-200 text-sm text-slate-600">
           Pricing: <span className="font-semibold text-slate-900">{app.pricing}</span>
         </div>
+      </div>
 
-        {/* Payment Modal */}
-        {showPaymentModal && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-              <div className="p-6 text-center border-b border-gray-200">
-                <div className="text-3xl mb-2">🔒</div>
-                <h2 className="text-2xl font-bold text-gray-900">Free Trials Used</h2>
-                <p className="text-gray-600 mt-1">Upgrade to continue generating reviews.</p>
-              </div>
-
-              <div className="p-6 space-y-4">
-                <div className="border-2 border-emerald-200 rounded-xl p-4 hover:border-emerald-400 transition-all">
-                  <h3 className="text-lg font-bold text-emerald-900 mb-1">Basic</h3>
-                  <div className="text-2xl font-bold text-emerald-700">₹199</div>
-                  <button
-                    onClick={() => handlePayment("review_basic")}
-                    className="w-full mt-3 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700"
-                  >
-                    Upgrade Now
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-4 bg-gray-50 text-center border-t">
-                <button onClick={() => setShowPaymentModal(false)} className="text-gray-500 hover:text-gray-700 font-medium text-sm">
-                  Maybe later
-                </button>
-              </div>
+      {/* Payment Modal */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden relative">
+            <button 
+              onClick={() => setShowPaymentModal(false)} 
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-700"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            <div className="p-6">
+              <div className="text-3xl mb-4 text-center">🔒</div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Free Trial Used</h2>
+              <p className="text-gray-600 text-sm mb-6">Subscribe for unlimited performance reviews.</p>
+              <button 
+                onClick={() => handlePayment("basic")} 
+                className="w-full py-3 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 mb-3"
+              >
+                Subscribe ₹299/report
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50 text-center border-t">
+              <button 
+                onClick={() => setShowPaymentModal(false)} 
+                className="text-gray-500 hover:text-gray-700 text-sm"
+              >
+                Maybe later
+              </button>
             </div>
           </div>
-        )}
-      </div>
-    </CustomerMicroAppShell>
+        </div>
+      )}
+    </div>
   );
 }
