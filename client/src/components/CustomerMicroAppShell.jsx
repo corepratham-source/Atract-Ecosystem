@@ -2,19 +2,21 @@ import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { getStoredUser } from "./ProtectedRoute";
 import AdsSidebar from "./AdsSidebar";
+import Logo from "../assets/Logo.png";
 
 /**
  * Customer Micro App Shell
  * 
  * Layout: Ads on LEFT, Content on RIGHT
- * Navbar shows: App name + Profile dropdown
+ * Navbar shows: Logo + App name + Profile dropdown
  * 
  * @param {Object} app - App configuration object (contains name, valueProposition, icon)
  * @param {React.ReactNode} children - Content to render
  * @param {boolean} showHeader - Whether to show the header with profile dropdown (default: true)
  * @param {boolean} showAds - Whether to show the ads sidebar (default: true)
+ * @param {boolean} fullWidth - Whether content should use full width (no max-w-5xl) for split layouts (default: false)
  */
-export default function CustomerMicroAppShell({ app, children, showHeader = true, showAds = true }) {
+export default function CustomerMicroAppShell({ app, children, showHeader = true, showAds = true, fullWidth = false }) {
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -23,7 +25,6 @@ export default function CustomerMicroAppShell({ app, children, showHeader = true
   const userName = user?.name || "User";
   const userEmail = user?.email || "";
   const appName = app?.name || "App";
-  const appIcon = app?.icon || "📱";
 
   const handleLogout = () => {
     localStorage.removeItem("user");
@@ -76,7 +77,7 @@ export default function CustomerMicroAppShell({ app, children, showHeader = true
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                     </svg>
                   </Link>
-                  <span className="text-2xl" role="img" aria-label={appName}>{appIcon}</span>
+                  <img src={Logo} alt="ATRact" className="w-8 h-8 object-contain" />
                   <h1 className="text-lg font-bold text-slate-900">{appName}</h1>
                 </div>
 
@@ -150,8 +151,8 @@ export default function CustomerMicroAppShell({ app, children, showHeader = true
         )}
 
         {/* Scrollable Main Content */}
-        <main className="flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
-          <div className="max-w-5xl mx-auto">
+        <main className={`flex-1 overflow-y-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-8 ${fullWidth ? "" : ""}`}>
+          <div className={fullWidth ? "w-full" : "max-w-5xl mx-auto"}>
             {children}
           </div>
         </main>

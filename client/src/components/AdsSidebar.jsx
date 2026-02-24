@@ -63,79 +63,101 @@ export default function AdsSidebar() {
   const ad = googleAds[currentAd];
 
   return (
-    <aside className="hidden lg:flex lg:w-80 lg:flex-col border-r border-slate-200 bg-white overflow-y-auto sticky top-0 h-screen">
+    <aside 
+      className="hidden lg:flex lg:w-80 lg:flex-col border-r border-slate-200 bg-white overflow-y-auto sticky top-0 h-screen"
+      style={{
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#cbd5e1 #f1f5f9',
+      }}
+    >
+      {/* Custom thin scrollbar styles */}
+      <style>{`
+        .thin-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .thin-scrollbar::-webkit-scrollbar-track {
+          background: #f1f5f9;
+        }
+        .thin-scrollbar::-webkit-scrollbar-thumb {
+          background: #cbd5e1;
+          border-radius: 2px;
+        }
+        .thin-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #94a3b8;
+        }
+      `}</style>
+      
       {/* Back Button */}
-      <div className="p-4 border-b border-slate-200">
+      <div className="p-2 border-b border-slate-200">
         <button
           onClick={() => navigate("/customer")}
-          className="w-full flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center gap-1 px-2 py-2 text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
           title="Back to Dashboard"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
           </svg>
-          Back to Dashboard
         </button>
       </div>
 
-      {/* Ad Container */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        <advertisement className="space-y-4">
-        <div className="relative group cursor-pointer rounded-lg overflow-hidden border border-slate-200 hover:border-slate-300 transition-all">
-          {/* Ad Image */}
-          <div className="relative h-32 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
-            <img
-              src={ad.image}
-              alt={ad.title}
-              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-              onError={(e) => {
-                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23e2e8f0' width='400' height='200'/%3E%3C/svg%3E";
-              }}
-            />
-            <div className="absolute top-2 right-2 bg-slate-800 text-white text-xs font-semibold px-2 py-1 rounded">
-              {ad.badge}
+      {/* Ad Container - Thin vertical scrollbar */}
+      <div className="flex-1 p-2 overflow-y-auto thin-scrollbar">
+        <div className="space-y-3">
+          <div className="relative group cursor-pointer rounded-lg overflow-hidden border border-slate-200 hover:border-blue-400 transition-all duration-300 hover:shadow-md transform hover:-translate-y-0.5">
+            {/* Ad Image */}
+            <div className="relative h-20 bg-gradient-to-br from-slate-100 to-slate-200 overflow-hidden">
+              <img
+                src={ad.image}
+                alt={ad.title}
+                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                onError={(e) => {
+                  e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 200'%3E%3Crect fill='%23e2e8f0' width='400' height='200'/%3E%3C/svg%3E";
+                }}
+              />
+              <div className="absolute top-1 right-1 bg-slate-800 text-white text-[10px] font-semibold px-1.5 py-0.5 rounded">
+                {ad.badge}
+              </div>
+            </div>
+
+            {/* Ad Content */}
+            <div className="p-2 bg-white">
+              <h3 className="font-semibold text-slate-900 text-[10px] leading-tight mb-1 line-clamp-2">
+                {ad.title}
+              </h3>
+              <p className="text-[9px] text-slate-600 line-clamp-2 mb-2">
+                {ad.description}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-[8px] text-slate-500 font-medium">{ad.domain}</span>
+                <button className="text-[9px] font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-1.5 py-0.5 rounded transition-colors">
+                  {ad.cta}
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Ad Content */}
-          <div className="p-3 bg-white">
-            <h3 className="font-semibold text-slate-900 text-sm leading-tight mb-1 line-clamp-2">
-              {ad.title}
-            </h3>
-            <p className="text-xs text-slate-600 line-clamp-2 mb-3">
-              {ad.description}
-            </p>
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-slate-500 font-medium">{ad.domain}</span>
-              <button className="text-xs font-semibold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded transition-colors">
-                {ad.cta}
-              </button>
-            </div>
+          {/* Ad Indicators - Very small dots */}
+          <div className="flex justify-center gap-0.5">
+            {googleAds.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentAd(idx)}
+                className={`w-1 h-1 rounded-full transition-all ${
+                  idx === currentAd ? "bg-blue-600 w-2" : "bg-slate-300 hover:bg-slate-400"
+                }`}
+                aria-label={`Ad ${idx + 1}`}
+              />
+            ))}
+          </div>
+
+          {/* Why These Ads */}
+          <div className="pt-2 border-t border-slate-200 text-center">
+            <p className="text-[8px] text-slate-500 mb-1">Free users</p>
+            <button className="text-[9px] text-slate-600 hover:text-slate-900 underline">
+              No ads - Subscribe
+            </button>
           </div>
         </div>
-
-        {/* Ad Indicators */}
-        <div className="flex justify-center gap-1">
-          {googleAds.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentAd(idx)}
-              className={`w-1.5 h-1.5 rounded-full transition-all ${
-                idx === currentAd ? "bg-blue-600 w-4" : "bg-slate-300 hover:bg-slate-400"
-              }`}
-              aria-label={`Ad ${idx + 1}`}
-            />
-          ))}
-        </div>
-
-        {/* Why These Ads */}
-        <div className="pt-4 border-t border-slate-200 text-center">
-          <p className="text-xs text-slate-500 mb-2">Ads shown to free users</p>
-          <button className="text-xs text-slate-600 hover:text-slate-900 underline">
-            Remove ads - Subscribe Now
-          </button>
-        </div>
-        </advertisement>
       </div>
     </aside>
   );

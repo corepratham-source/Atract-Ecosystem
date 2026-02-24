@@ -7,6 +7,8 @@ import LeftSidebar from "../components/LeftSidebar";
 import { microApps } from "../data/microApps";
 import { API_BASE } from "../config/api";
 import { getStoredUser, STORAGE_KEY } from "../components/ProtectedRoute";
+import { signOut } from "firebase/auth";
+import { auth } from "../config/firebaseConfig";
 const API_URL = `${API_BASE}/apps`;
 
 const FETCH_TIMEOUT_MS = 6000;
@@ -187,8 +189,16 @@ export default function Dashboard({ isPro = false }) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    // Try Firebase logout
+                    await signOut(auth);
+                  } catch (firebaseError) {
+                    console.log("Firebase logout error:", firebaseError.code);
+                  }
+                  // Clear local storage
                   localStorage.removeItem(STORAGE_KEY);
+                  sessionStorage.removeItem(STORAGE_KEY);
                   navigate("/login", { replace: true });
                 }}
                 className="px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition-colors"

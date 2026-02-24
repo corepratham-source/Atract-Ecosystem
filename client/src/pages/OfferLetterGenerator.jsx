@@ -15,7 +15,7 @@ const defaultApp = {
 
 export default function OfferLetterGenerator({ app = defaultApp, isPro = false }) {
   useTrackAppUsage('offer-letter');
-  
+
   const [form, setForm] = useState({
     company: "",
     candidate: "",
@@ -250,21 +250,19 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
           <div className="flex gap-2 mb-4 lg:mb-6 overflow-x-auto pb-2">
             <button
               onClick={() => setActiveTab("input")}
-              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
-                activeTab === "input"
+              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${activeTab === "input"
                   ? "bg-purple-500 text-white"
                   : "bg-white text-gray-600 hover:bg-gray-50"
-              }`}
+                }`}
             >
               📝 Create Letter
             </button>
             <button
               onClick={() => setActiveTab("results")}
-              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${
-                activeTab === "results"
+              className={`px-3 lg:px-4 py-2 rounded-xl font-medium transition-all whitespace-nowrap ${activeTab === "results"
                   ? "bg-purple-500 text-white"
                   : "bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
-              }`}
+                }`}
               disabled={!output}
             >
               📄 Results {output ? "" : "(0)"}
@@ -400,11 +398,10 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
                     <button
                       onClick={handleGenerate}
                       disabled={!form.company?.trim() || !form.candidate?.trim() || !form.role?.trim() || isLoading}
-                      className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${
-                        form.company?.trim() && form.candidate?.trim() && form.role?.trim() && !isLoading
+                      className={`w-full py-3 sm:py-4 rounded-lg font-semibold text-lg transition-all ${form.company?.trim() && form.candidate?.trim() && form.role?.trim() && !isLoading
                           ? "bg-purple-600 text-white hover:bg-purple-700 shadow-md hover:shadow-lg"
                           : "bg-slate-200 text-slate-500 cursor-not-allowed"
-                      }`}
+                        }`}
                     >
                       {isLoading ? "Generating..." : "✍️ Generate Letter"}
                     </button>
@@ -435,8 +432,10 @@ export default function OfferLetterGenerator({ app = defaultApp, isPro = false }
                         ⬇️ Download
                       </button>
                     </div>
-                    <div className="bg-slate-50 p-6 rounded-xl border border-slate-200 whitespace-pre-wrap text-sm leading-relaxed font-mono text-slate-700">
-                      {output}
+                    <div className="bg-white p-8 rounded-2xl border border-slate-200 shadow-sm leading-relaxed text-slate-700 text-[15px]">
+                      <div className="whitespace-pre-wrap font-serif">
+                        {output}
+                      </div>
                     </div>
                   </div>
                 )}

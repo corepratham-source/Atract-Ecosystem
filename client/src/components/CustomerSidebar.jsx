@@ -1,6 +1,9 @@
 import { Link, useLocation } from "react-router-dom";
 import { microApps } from "../data/microApps";
 import { STORAGE_KEY } from "./ProtectedRoute";
+import { signOut } from "firebase/auth";
+import { auth } from "../config/firebaseConfig";
+import Logo from "../assets/Logo.png";
 
 /**
  * Fixed Left Sidebar for Customer Panel
@@ -21,8 +24,16 @@ export default function CustomerSidebar({ isOpen, onClose }) {
     ? location.pathname.split("/customer/apps/")[1] 
     : null;
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Try Firebase logout
+      await signOut(auth);
+    } catch (firebaseError) {
+      console.log("Firebase logout error (may not be logged in):", firebaseError.code);
+    }
+    // Clear local storage
     localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     window.location.href = "/login";
   };
 
@@ -55,9 +66,11 @@ export default function CustomerSidebar({ isOpen, onClose }) {
               className="flex items-center gap-3"
               onClick={onClose}
             >
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center flex-shrink-0">
-                <span className="text-white text-lg font-bold">A</span>
-              </div>
+              <img 
+                src={Logo} 
+                alt="ATRact" 
+                className="w-10 h-10 object-contain"
+              />
               <div>
                 <span className="text-xl font-bold text-slate-900">ATRact</span>
                 <p className="text-xs text-slate-500">HR Solutions</p>

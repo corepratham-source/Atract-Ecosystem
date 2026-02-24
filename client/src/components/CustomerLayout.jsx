@@ -3,6 +3,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getStoredUser, STORAGE_KEY } from "./ProtectedRoute";
 import { microApps } from "../data/microApps";
 import CustomerSidebar from "./CustomerSidebar";
+import { signOut } from "firebase/auth";
+import { auth } from "../config/firebaseConfig";
+import Logo from "../assets/Logo.png";
 
 /**
  * Reusable CustomerLayout Component
@@ -26,8 +29,16 @@ export default function CustomerLayout({
   const isAppPage = location.pathname.startsWith("/customer/apps/");
   const isDashboard = location.pathname === "/customer";
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      // Try Firebase logout
+      await signOut(auth);
+    } catch (firebaseError) {
+      console.log("Firebase logout error:", firebaseError.code);
+    }
+    // Clear local storage
     localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
     navigate("/login", { replace: true });
   };
 
@@ -94,9 +105,11 @@ export default function CustomerLayout({
                   to="/customer"
                   className="flex items-center gap-2 text-xl font-bold text-slate-900 hover:text-slate-700 transition-colors"
                 >
-                  <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">A</span>
-                  </div>
+                  <img 
+                    src={Logo} 
+                    alt="ATRact" 
+                    className="w-8 h-8 object-contain"
+                  />
                   <span className="hidden sm:inline">ATRact</span>
                 </Link>
 

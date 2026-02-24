@@ -1,6 +1,7 @@
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { ADMIN_BASE } from "../config/routes";
+import Logo from "../assets/Logo.png";
 
 const navItems = [
   { to: ADMIN_BASE + "/", label: "Ecosystem Hub" },
@@ -9,9 +10,11 @@ const navItems = [
 
 function LogoMark() {
   return (
-    <div className="h-9 w-9 rounded-xl bg-slate-900 text-white grid place-items-center shadow-sm">
-      <span className="text-sm font-semibold tracking-tight">A</span>
-    </div>
+    <img 
+      src={Logo} 
+      alt="ATRact" 
+      className="h-9 w-9 object-contain rounded-xl shadow-sm"
+    />
   );
 }
 

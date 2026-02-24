@@ -7,8 +7,6 @@ import AdminDashboard from "./pages/AdminDashboard";
 import CustomerDashboard from "./pages/CustomerDashboard";
 import CustomerAppPage from "./pages/CustomerAppPage";
 import CustomerLayout from "./components/CustomerLayout";
-import CustomerMicroAppShell from "./components/CustomerMicroAppShell";
-
 import EcosystemHubPage from "./pages/EcosystemHub";
 import Dashboard from "./pages/Dashboard";
 import MicroApp from "./pages/MicroApp";

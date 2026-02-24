@@ -35,10 +35,42 @@ const cosine = (a, b) => {
 };
 const getTFIDFFallback = (jd, resume) => {
   try {
+    // Check for industry mismatch first
+    const resumeLower = resume.toLowerCase();
+    const jdLower = jd.toLowerCase();
+    
+    // Detect resume industry
+    const resumeIsPlastics = ["plastic","polym","injection mould","moulding","cipet",
+      "thin wall","pipe fitting"," pp "," pe "," abs "," pvc ","polymer"].some((k) => resumeLower.includes(k));
+    const resumeIsIT = ["software developer","javascript developer","python developer",
+      "react developer","frontend developer","backend developer","full stack developer",
+      "software engineer","java developer","node js","reactjs","angular","vue"].some((k) => resumeLower.includes(k));
+    const resumeIsFinance = ["accountant","financial analyst","tax","audit","ca","cfa","banking"].some((k) => resumeLower.includes(k));
+    const resumeIsMarketing = ["marketing","digital marketing","seo","content","brand","social media"].some((k) => resumeLower.includes(k));
+    
+    // Detect JD industry
+    const jdIsMetallurgy = ["smelt","refin","metallurg","furnace","ingot","lead recycl",
+      "battery recycl","slag","flux","alloying","rml","foundry","steel plant"].some((k) => jdLower.includes(k));
+    const jdIsHeavyMfg = ["blast furnace","steel plant","foundry","die casting","manufacturing plant"].some((k) => jdLower.includes(k));
+    const jdIsIT = ["software developer","javascript developer","python developer",
+      "react developer","frontend developer","backend developer","full stack developer"].some((k) => jdLower.includes(k));
+    
+    // Check for clear industry mismatch
+    const hasIndustryMismatch = (resumeIsPlastics || resumeIsIT || resumeIsFinance || resumeIsMarketing) && 
+                               (jdIsMetallurgy || jdIsHeavyMfg) && !jdIsIT;
+    
     const idf = calcIDF([jd, resume]), vocab = Array.from(idf.keys());
     const raw = Math.round(cosine(tfidfVec(jd, vocab, idf), tfidfVec(resume, vocab, idf)) * 100);
-    const capped = Math.min(Math.max(raw, 15), 50);
-    console.log(`[TF-IDF] raw=${raw}% → capped=${capped}%`);
+    
+    // Cap at 25% for clear industry mismatch, otherwise cap at 50%
+    let capped;
+    if (hasIndustryMismatch) {
+      capped = Math.min(Math.max(raw, 10), 25); // Industry mismatch: 10-25%
+      console.log(`[TF-IDF] raw=${raw}% → capped=${capped}% (INDUSTRY MISMATCH DETECTED)`);
+    } else {
+      capped = Math.min(Math.max(raw, 15), 50); // Normal: 15-50%
+      console.log(`[TF-IDF] raw=${raw}% → capped=${capped}%`);
+    }
     return capped;
   } catch (e) {
     console.error("[TF-IDF] Error:", e.message);

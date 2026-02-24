@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 import { getStoredUser } from "../components/ProtectedRoute";
 import { API_BASE } from "../config/api";
@@ -170,8 +170,9 @@ export default function SalaryBenchmarkTool({ app = defaultApp, isPro = false })
   const getVerdict = () => {
     if (!report || !report.salary) return null;
     const userSalary = parseInt(report.salary.replace(/[^0-9]/g, ""));
-    const median = report.median || userSalary;
-    const diff = ((userSalary - median) / median) * 100;
+    const medianValue = report.median ? parseInt(report.median.replace(/[^0-9]/g, "")) : userSalary;
+    if (!userSalary || !medianValue) return null;
+    const diff = ((userSalary - medianValue) / medianValue) * 100;
     if (diff < -10) return { text: "Below Market", color: "red", icon: "⚠️" };
     if (diff > 20) return { text: "Above Market", color: "green", icon: "🎉" };
     return { text: "At Market Rate", color: "blue", icon: "✅" };
@@ -180,12 +181,34 @@ export default function SalaryBenchmarkTool({ app = defaultApp, isPro = false })
   const verdict = getVerdict();
 
   return (
-    <CustomerMicroAppShell app={app}>
-      <div className="max-w-5xl mx-auto">
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen flex flex-col">
+        {/* Sticky Header */}
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">{app.name}</h1>
+              {app.valueProposition && (
+                <p className="text-xs text-gray-500 truncate hidden sm:block">{app.valueProposition}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" role="img" aria-label={app.name}>
+                {app.icon || '💰'}
+              </span>
+              {isPaid && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  Pro
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-5xl mx-auto p-6">
         <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm">
           <div className="flex-1 flex flex-col divide-y divide-slate-200">
-            {/* Header moved to navbar (CustomerMicroAppShell) */}
-
             {/* Content - scrollable */}
             <div className="flex-1 overflow-y-auto">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 sm:p-8">
@@ -288,7 +311,7 @@ export default function SalaryBenchmarkTool({ app = defaultApp, isPro = false })
                                 <div className="font-bold text-slate-900">{verdict.text}</div>
                                 <div className="text-sm text-slate-600">
                                   {report.salary && `Your salary: ${report.salary}`}
-                                  {report.median && ` | Market median: ₹${parseInt(report.median).toLocaleString()}`}
+                                  {report.median && ` | Market median: ${report.median}`}
                                 </div>
                               </div>
                             </div>
@@ -298,11 +321,11 @@ export default function SalaryBenchmarkTool({ app = defaultApp, isPro = false })
                         <div className="grid grid-cols-2 gap-4">
                           <div className="bg-slate-50 rounded-xl p-4">
                             <div className="text-xs text-slate-500 uppercase">Min</div>
-                            <div className="text-lg font-bold text-slate-900">₹{parseInt(report.min || 0).toLocaleString()}</div>
+                            <div className="text-lg font-bold text-slate-900">{report.min || 'N/A'}</div>
                           </div>
                           <div className="bg-slate-50 rounded-xl p-4">
                             <div className="text-xs text-slate-500 uppercase">Max</div>
-                            <div className="text-lg font-bold text-slate-900">₹{parseInt(report.max || 0).toLocaleString()}</div>
+                            <div className="text-lg font-bold text-slate-900">{report.max || 'N/A'}</div>
                           </div>
                         </div>
                       </div>
@@ -349,6 +372,8 @@ export default function SalaryBenchmarkTool({ app = defaultApp, isPro = false })
           </div>
         </div>
       )}
-    </CustomerMicroAppShell>
+    </div>
+  </div>
+  </div>
   );
 }

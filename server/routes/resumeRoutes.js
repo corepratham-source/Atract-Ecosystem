@@ -56,9 +56,21 @@ async function extractTextFromBuffer(buffer, mimetype, filename) {
       const text = data.text || "";
       console.log(`[TextExtract] PDF extracted: ${text.length} chars, ${data.numpages} pages`);
       console.log(`[TextExtract] PDF text preview:\n${text.substring(0, 500)}`);
+      
+      // Check if extracted text is too short - likely a scanned/image PDF
       if (text.trim().length < 50) {
-        throw new Error("PDF text extraction returned very little text — may be a scanned/image PDF");
+        console.warn("[TextExtract] PDF appears to be scanned/image-based - very little text extracted");
+        // Return a special indicator for scanned PDF
+        return { text: "", method: "scanned-pdf", isScanned: true, error: "This PDF appears to be a scanned document or image-based PDF. Please convert to a text-based PDF or DOCX format for better results." };
       }
+      
+      // Check text quality - if it contains mostly special characters, it's likely scanned
+      const alphaRatio = (text.match(/[a-zA-Z]/g) || []).length / (text.length || 1);
+      if (alphaRatio < 0.3) {
+        console.warn("[TextExtract] PDF has low text quality - likely scanned");
+        return { text: "", method: "scanned-pdf", isScanned: true, error: "This PDF appears to contain primarily images or scanned content. Please use a text-based PDF or convert to DOCX format." };
+      }
+      
       return { text, method: "pdf-parse" };
     } catch (err) {
       console.error("[TextExtract] PDF parse error:", err.message);
@@ -138,6 +150,16 @@ router.post("/upload", (req, res, next) => {
       let extractedMethod = "unknown";
       try {
         const result = await extractTextFromBuffer(buffer, mimetype, originalname);
+        
+        // Handle scanned PDF specially
+        if (result.isScanned) {
+          return res.status(422).json({
+            error: result.error || "Scanned PDF detected",
+            suggestion: "Please convert your scanned PDF to a text-based PDF or DOCX format. You can use tools like Adobe Acrobat or online converters.",
+            isScanned: true
+          });
+        }
+        
         extracted = result.text;
         extractedMethod = result.method;
       } catch (extractErr) {
@@ -229,12 +251,21 @@ router.post("/upload-jd", upload.single("jd"), async (req, res) => {
     const { originalname, mimetype, buffer } = req.file;
     console.log(`\n[JD] Upload: ${originalname} | ${mimetype}`);
 
-    let extractedText;
-    try {
-      extractedText = await extractTextFromBuffer(buffer, mimetype, originalname);
-    } catch (extractErr) {
-      return res.status(422).json({ error: `Text extraction failed: ${extractErr.message}` });
+    // Extract text from buffer
+    const extracted = await extractTextFromBuffer(buffer, mimetype, originalname);
+    
+    // Validate extracted result
+    if (!extracted || typeof extracted !== 'object') {
+      console.error("[JD] Invalid extraction result:", extracted);
+      return res.status(422).json({ error: "Failed to extract text from file - invalid result" });
     }
+    
+    if (typeof extracted.text !== 'string') {
+      console.error("[JD] Extracted text is not a string:", typeof extracted.text, extracted);
+      return res.status(422).json({ error: "Failed to extract text from file - invalid text format" });
+    }
+    
+    const extractedText = extracted.text;
 
     const cleanedText = extractedText
       .replace(/\r\n/g, "\n").replace(/\r/g, "\n")

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import MonetizationCard from "./MonetizationCard";
 import { ADMIN_BASE } from "../config/routes";
 import { STORAGE_KEY } from "./ProtectedRoute";
+import { signOut } from "firebase/auth";
+import { auth } from "../config/firebaseConfig";
 
 const googleAds = [
   {
@@ -52,8 +54,12 @@ const googleAds = [
   }
 ];
 
-export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
+/**
+ * @param {string} [backTo] - Optional path for Back button (e.g. "/customer" for customer panel). If not set, uses ADMIN_BASE + "/".
+ */
+export default function LeftSidebar({ app, isPro = false, isOpen, onClose, backTo }) {
   const navigate = useNavigate();
+  const backPath = backTo != null ? backTo : ADMIN_BASE + "/";
   const [currentAd, setCurrentAd] = useState(0);
 
   useEffect(() => {
@@ -65,6 +71,19 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
 
   const handleAdClick = () => {
     console.log("Ad clicked:", googleAds[currentAd].title);
+  };
+
+  const handleLogout = async () => {
+    try {
+      // Try Firebase logout
+      await signOut(auth);
+    } catch (firebaseError) {
+      console.log("Firebase logout error (may not be logged in):", firebaseError.code);
+    }
+    // Clear local storage
+    localStorage.removeItem(STORAGE_KEY);
+    sessionStorage.removeItem(STORAGE_KEY);
+    navigate("/login", { replace: true });
   };
 
   const ad = googleAds[currentAd];
@@ -87,7 +106,7 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
         <div className="flex-shrink-0">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between gap-2">
             <button
-              onClick={() => { onClose?.(); navigate(ADMIN_BASE + "/"); }}
+              onClick={() => { onClose?.(); navigate(backPath); }}
               className="flex items-center text-gray-600 hover:text-gray-900"
             >
               <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,10 +116,7 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose }) {
             </button>
             <button
               type="button"
-              onClick={() => {
-                localStorage.removeItem(STORAGE_KEY);
-                navigate("/login", { replace: true });
-              }}
+              onClick={handleLogout}
               className="text-sm font-medium text-slate-600 hover:text-slate-900 px-2 py-1 rounded-lg hover:bg-slate-100"
             >
               Logout

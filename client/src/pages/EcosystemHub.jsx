@@ -3,6 +3,8 @@ import EcosystemHubComponent from "../components/EcosystemHub";
 import HomeSidebar from "../components/HomeSidebar";
 import { ADMIN_BASE } from "../config/routes";
 import { getStoredUser, STORAGE_KEY } from "../components/ProtectedRoute";
+import { signOut } from "firebase/auth";
+import { auth } from "../config/firebaseConfig";
 
 const homeApp = {
   valueProposition: "A portfolio of focused micro-products for HR-tech and professionals."
@@ -39,8 +41,16 @@ export default function EcosystemHubPage({ isPro = false }) {
               </button>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  try {
+                    // Try Firebase logout
+                    await signOut(auth);
+                  } catch (firebaseError) {
+                    console.log("Firebase logout error:", firebaseError.code);
+                  }
+                  // Clear local storage
                   localStorage.removeItem(STORAGE_KEY);
+                  sessionStorage.removeItem(STORAGE_KEY);
                   navigate("/login", { replace: true });
                 }}
                 className="px-3 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl border border-slate-200 transition-colors"

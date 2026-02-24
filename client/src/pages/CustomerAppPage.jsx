@@ -40,9 +40,8 @@ const CUSTOMER_APP_MAP = {
  * Customer App Page
  * 
  * This component renders customer micro apps.
- * Each micro app uses CustomerMicroAppShell which shows:
- * - Ads sidebar on the LEFT
- * - Content on the RIGHT
+ * Each micro app uses LeftSidebar (ads + back to dashboard) on the LEFT
+ * and content on the RIGHT.
  */
 export default function CustomerAppPage() {
   const { appId } = useParams();
@@ -50,14 +49,14 @@ export default function CustomerAppPage() {
   const app = appById(appId) || (config?.app && config.app());
 
   if (config?.Component) {
-    // Render the micro app - it will use CustomerMicroAppShell internally
+    // Render the micro app - it uses LeftSidebar internally
     const Comp = config.Component;
     return <Comp app={app} isPro={isPro} />;
   }
 
   if (app) {
-    // Fallback: generic micro app view
-    return <MicroApp appId={appId} isPro={isPro} />;
+    // Fallback: generic micro app view with AdsSidebar
+    return <MicroApp appId={appId} isPro={isPro} isCustomer />;
   }
 
   return <Navigate to="/customer" replace />;

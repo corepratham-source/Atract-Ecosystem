@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import SectionTitle from "../components/SectionTitle";
-import CustomerMicroAppShell from "../components/CustomerMicroAppShell";
+import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 import { getStoredUser } from "../components/ProtectedRoute";
 import { API_BASE } from "../config/api";
@@ -189,13 +189,12 @@ export default function CandidateFollowUpTracker({ app = defaultApp }) {
   const canAdd = candidateName?.trim() && role?.trim() && nextDate;
 
   return (
-    <CustomerMicroAppShell app={app}>
-      <div className="max-w-5xl mx-auto">
-        {/* Main Card */}
+    <div className="flex min-h-screen bg-gray-100">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen overflow-y-auto">
+      <div className="max-w-5xl mx-auto p-6">
         <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="flex-1 flex flex-col divide-y divide-slate-200">
-            {/* Header moved to navbar (CustomerMicroAppShell) */}
-
             {/* Content Area */}
             <div className="flex-1 overflow-hidden">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 sm:p-8 h-full">
@@ -411,6 +410,7 @@ export default function CandidateFollowUpTracker({ app = defaultApp }) {
             </div>
           </div>
         )}
-    </CustomerMicroAppShell>
+    </div>
+  </div>
   );
 }

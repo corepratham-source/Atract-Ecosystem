@@ -2,9 +2,14 @@ import { useState, useEffect } from "react";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
+import { getStoredUser } from "../components/ProtectedRoute";
+import { auth } from "../config/firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
+const MAX_FREE_RESUMES = 1;
+const MAX_PAID_RESUMES = 5;
 
 const defaultApp = {
   name: "Resume Screener Lite",
@@ -12,12 +17,14 @@ const defaultApp = {
   pricing: "₹499/month or ₹99 per batch",
 };
 
+
 export default function ResumeScreenerLite({ app = defaultApp }) {
   // Track app usage
   useTrackAppUsage('resume-screener');
   
   const [jd, setJd] = useState("");
-  const [resumeText, setResumeText] = useState("");
+  const [jdFile, setJdFile] = useState(null);
+  const [jdFileName, setJdFileName] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [result, setResult] = useState(null);
@@ -32,15 +39,54 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
   const [uploadedResumes, setUploadedResumes] = useState([]);
   const [matchResults, setMatchResults] = useState([]);
   const [currentResumeId, setCurrentResumeId] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
   const [uploadedFile, setUploadedFile] = useState(null);
 
   useEffect(() => {
-    const stored = sessionStorage.getItem("resumeScreenerTrials");
-    if (stored !== null) setTrialCount(parseInt(stored, 10));
-    const paid = sessionStorage.getItem("resumeScreenerPaid") === "true";
-    setIsPaid(paid);
-    fetchUploadedResumes();
-  }, []);
+    // Check if user is admin - admin has unlimited access
+    // Use Firebase auth state listener for real-time updates
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // Check stored user for role and subscription
+        const storedUser = getStoredUser();
+        const isAdmin = storedUser?.role === "admin";
+        
+        // Check subscription status from stored user data
+        const hasSubscription = storedUser?.subscription === 'paid' || 
+                                storedUser?.subscriptionStatus === 'active' ||
+                                sessionStorage.getItem("resumeScreenerPaid") === "true";
+        
+        if (isAdmin) {
+          setIsPaid(true);
+        } else {
+          const stored = sessionStorage.getItem("resumeScreenerTrials");
+          if (stored !== null) setTrialCount(parseInt(stored, 10));
+          setIsPaid(hasSubscription);
+        }
+      } else {
+        // Not logged in - check session storage
+        const stored = sessionStorage.getItem("resumeScreenerTrials");
+        if (stored !== null) setTrialCount(parseInt(stored, 10));
+        const paid = sessionStorage.getItem("resumeScreenerPaid") === "true";
+        setIsPaid(paid);
+      }
+      fetchUploadedResumes();
+    });
+    
+    // Restore JD from sessionStorage if available
+    const savedJD = sessionStorage.getItem("resumeScreenerJD");
+    if (savedJD) {
+      setJd(savedJD);
+      // Also restore match results if JD exists (delayed to ensure functions are defined)
+      setTimeout(() => {
+        if (savedJD.trim()) {
+          matchAllResumes(savedJD);
+        }
+      }, 100);
+    }
+    
+    return () => unsubscribe();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchUploadedResumes = async () => {
     try {
@@ -61,35 +107,95 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     sessionStorage.setItem("resumeScreenerTrials", count.toString());
   };
 
-  const extractDOCX = async (arrayBuffer) => {
-    // No longer needed - backend extracts text using mammoth
-    return "";
-  };
-
-  const extractPDF = (arrayBuffer) => {
-    // No longer needed - backend extracts text using pdf-parse
-    return "";
-  };
-
   const handleFileUpload = async (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    // No limits - all users can upload unlimited resumes
+    
+    // Handle multiple files for paid users
+    if (isPaid && files.length > 1) {
+      const newFiles = Array.from(files).map(file => ({
+        file,
+        name: file.name,
+        status: 'pending'
+      }));
+      setUploadedFiles(prev => [...prev, ...newFiles]);
+    } else {
+      // Single file upload
+      const file = files[0];
+      setFileName(file.name);
+      setUploadedFile(file);
+    }
+    setError("");
+    setIsProcessing(false);
+  };
+
+  // Handle JD file upload - send to server for text extraction
+  const handleJDFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setFileName(file.name);
-    setUploadedFile(file);  // Store the actual file object, not extracted text
-    setResumeText("");     // Clear any previous extracted text - backend will extract
+    
+    setIsProcessing(true);
     setError("");
-    setIsProcessing(false);  // Don't process here - wait for analyze button
+    
+    try {
+      // Send file to server for text extraction using the existing /upload-jd endpoint
+      const formData = new FormData();
+      formData.append("jd", file); // Server expects 'jd' field name
+      
+      const response = await fetch(`${API_BASE}/api/resume/upload-jd`, {
+        method: "POST",
+        body: formData,
+      });
+      
+      const data = await response.json();
+      
+      if (data.error) {
+        console.error("Failed to extract text from JD file:", data.error);
+        setIsProcessing(false);
+        return;
+      }
+      
+      const extractedText = data.text || "";
+      if (!extractedText || !extractedText.trim()) {
+        console.error("Could not extract text from the file. Please try pasting the JD instead.");
+        setIsProcessing(false);
+        return;
+      }
+      
+      setJd(extractedText);
+      setJdFile(file);
+      setJdFileName(file.name);
+      sessionStorage.setItem("resumeScreenerJD", extractedText);
+      
+      // If there are resumes, re-match with new JD
+      if (uploadedResumes.length > 0 || uploadedFile || uploadedFiles.length > 0) {
+        setTimeout(() => matchAllResumes(extractedText), 100);
+      }
+    } catch (err) {
+      setError("Failed to read JD file: " + err.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // Clear JD file and use text area instead
+  const clearJDFile = () => {
+    setJdFile(null);
+    setJdFileName("");
   };
 
   // Analyze and automatically store resume in database
   const analyzeAndStoreResume = async () => {
-    if (!jd || !uploadedFile) {
+    const hasFiles = uploadedFile || uploadedFiles.length > 0;
+    if (!jd || !hasFiles) {
       setError("Please enter JD and upload a resume");
       return;
     }
 
-    // Check free trials
-    if (trialCount >= MAX_FREE_TRIALS && !isPaid) {
+    // Check free trials - only for non-paid users
+    if (!isPaid && trialCount >= MAX_FREE_TRIALS) {
       setShowPayment(true);
       return;
     }
@@ -98,63 +204,70 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     setError("");
 
     try {
-      //Use FormData to send the actual file to backend
-      // The backend will use pdf-parse/mammoth to extract text properly
-      const formData = new FormData();
-      formData.append("resume", uploadedFile);  // "resume" must match upload.single("resume") in backend
-      formData.append("name", fileName.replace(/\.[^.]+$/, ""));  // Name without extension
-
-      const uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
-        method: "POST",
-        // ⚠️ DO NOT set Content-Type header — browser sets it automatically with boundary
-        body: formData,
-      });
-
-      const uploadData = await uploadResponse.json();
-      
-      if (uploadData.error) {
-        setError(uploadData.error + (uploadData.suggestion ? ` ${uploadData.suggestion}` : ""));
-        setIsProcessing(false);
-        return;
-      }
-
-      // Get the resume ID and extracted text
-      const resumeId = uploadData.id;
-      const extractedText = uploadData.text || "";  // Backend returns extracted text in response
-
-      console.log(`[Upload] ✅ Success: ${uploadData.textLength} chars extracted via ${uploadData.extractionMethod}`);
-
-      // Then analyze the resume
-      const analyzeResponse = await fetch(`${API_BASE}/api/analysis/analyze`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jdText: jd, resumeText: extractedText }),
-      });
-
-      const analyzeData = await analyzeResponse.json();
-
-      if (analyzeData.error) {
-        setError(analyzeData.error);
-        setHasAnalyzed(false);
-      } else {
-        // Store the result
-        setResult(analyzeData);
-        setCurrentResumeId(resumeId);
+      // Handle multiple files for paid users
+      if (uploadedFiles.length > 0) {
+        // Process multiple resumes
+        for (const fileObj of uploadedFiles) {
+          await processSingleResume(fileObj.file, fileObj.name);
+        }
+        // Clear uploaded files after processing
+        setUploadedFiles([]);
+        setFileName("");
+        setUploadedFile(null);
         
-        // Refresh uploaded resumes list
-        await fetchUploadedResumes();
-        
-        // Match all resumes against JD
-        await matchAllResumes(jd);
-        
-        setHasAnalyzed(true);
-        if (!isPaid) updateTrialCount(trialCount + 1);
+        // Match all resumes against JD in background
+        matchAllResumes(jd);
+        fetchUploadedResumes();
+      } else if (uploadedFile) {
+        // Process single resume (existing logic)
+        await processSingleResume(uploadedFile, fileName);
       }
     } catch (e) {
       setError("Analysis failed: " + e.message);
       setHasAnalyzed(false);
     } finally {
       setIsProcessing(false);
+    }
+  };
+
+  // Helper function to process a single resume
+  const processSingleResume = async (file, name) => {
+    const formData = new FormData();
+    formData.append("resume", file);
+    formData.append("name", name.replace(/\.[^.]+$/, ""));
+
+    const uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const uploadData = await uploadResponse.json();
+    
+    if (uploadData.error) {
+      setError(uploadData.error + (uploadData.suggestion ? ` ${uploadData.suggestion}` : ""));
+      return;
+    }
+
+    console.log(`[Upload] ✅ Success: ${uploadData.textLength} chars extracted via ${uploadData.extractionMethod}`);
+
+    // Analyze the resume
+    const analyzeResponse = await fetch(`${API_BASE}/api/analysis/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ jdText: jd, resumeText: uploadData.text || "" }),
+    });
+
+    const analyzeData = await analyzeResponse.json();
+
+    if (analyzeData.error) {
+      setError(analyzeData.error);
+    } else {
+      setResult(analyzeData);
+      setCurrentResumeId(uploadData.id);
+      setHasAnalyzed(true);
+      
+      // Update trial count in background (for non-paid users)
+      if (!isPaid) updateTrialCount(trialCount + 1);
     }
   };
 
@@ -320,39 +433,115 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
   return (
     <div className="flex min-h-screen bg-gray-100">
-      <LeftSidebar app={app} isPro={isPaid} />
-
-      <div className="flex-1 ml-80 flex">
-        <div className="w-1/2 h-screen overflow-hidden flex flex-col">
-          <div className="p-6 flex-1 flex flex-col">
+      <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+      <div className="flex-1 ml-80 min-h-screen flex flex-col">
+        {/* Sticky Header - App Name at top of right side */}
+        <div className="flex-shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">{app.name}</h1>
+              {app.valueProposition && (
+                <p className="text-xs text-gray-500 truncate hidden sm:block">{app.valueProposition}</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-2xl" role="img" aria-label={app.name}>
+                {app.icon || '📋'}
+              </span>
+              {isPaid && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+                  Pro
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-hidden flex">
+          <div className="w-1/2 h-screen overflow-hidden flex flex-col">
+            <div className="p-6 flex-1 flex flex-col">
             <div className="bg-white border rounded-xl shadow-sm flex-1 flex flex-col">
               <div className="p-6 border-b border-gray-100">
                 <h2 className="text-xl font-bold text-gray-900">📋 Job Description</h2>
-                <p className="text-sm text-gray-500 mt-1">
-                  {uploadedResumes.length} resumes in database • {trialCount}/{MAX_FREE_TRIALS} free trials used
-                </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+              <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {error && (
                   <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {error}
                   </div>
                 )}
 
-                <Field label="Job Description" helper="Paste the job description">
-                  <textarea
-                    value={jd}
-                    onChange={(e) => setJd(e.target.value)}
-                    className="w-full h-40 rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
-                    placeholder="Paste JD here..."
-                  />
-                </Field>
-
-                <Field label="Resume" helper="Upload PDF or DOCX">
+                <Field label="Job Description" helper="Upload JD file or paste job description">
+                  {/* JD File Upload Option */}
                   <input
                     type="file"
                     accept=".pdf,.docx,.txt"
+                    onChange={handleJDFileUpload}
+                    className="hidden"
+                    id="jd-file-upload"
+                  />
+                  <label
+                    htmlFor="jd-file-upload"
+                    className={`flex items-center justify-center w-full h-11 rounded-lg cursor-pointer mb-3 font-medium transition-colors ${
+                      jdFile 
+                        ? 'bg-green-100 text-green-700 border-2 border-green-300' 
+                        : 'bg-blue-50 text-blue-600 border-2 border-blue-200 hover:bg-blue-100'
+                    }`}
+                  >
+                    {jdFile ? (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span>{jdFileName}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); clearJDFile(); }}
+                          className="ml-2 text-green-500 hover:text-red-500"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                        </svg>
+                        <span>Upload JD</span>
+                      </div>
+                    )}
+                  </label>
+                   
+                  {/* OR divider */}
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="flex-1 h-px bg-gray-200"></div>
+                    <span className="text-xs text-gray-400 font-medium">OR</span>
+                    <div className="flex-1 h-px bg-gray-200"></div>
+                  </div>
+                   
+                  {/* Paste JD Text Area */}
+                  <textarea
+                    value={jd}
+                    onChange={(e) => {
+                      setJd(e.target.value);
+                      setJdFile(null);
+                      setJdFileName("");
+                      sessionStorage.setItem("resumeScreenerJD", e.target.value);
+                    }}
+                    className="w-full h-32 rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="Or paste job description here..."
+                    disabled={!!jdFile}
+                  />
+                </Field>
+
+                <Field label={`Resume${isPaid ? ' (Max 5)' : ' (Max 1)'}`} helper={`Upload PDF or DOCX${isPaid ? ' - You can upload up to 5 resumes at a time' : ''}`}>
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt"
+                    multiple={isPaid}
                     onChange={handleFileUpload}
                     className="hidden"
                     id="resume-upload"
@@ -366,12 +555,19 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                         <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2" />
                         <p className="text-gray-600 text-sm">Processing...</p>
                       </div>
-                    ) : uploadedFile ? (
+                    ) : uploadedFile || uploadedFiles.length > 0 ? (
                       <div className="text-center">
                         <svg className="w-10 h-10 text-green-600 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        <span className="text-xl text-black truncate block max-w-[200px] mx-auto">{fileName}</span>
+                        {uploadedFiles.length > 1 ? (
+                          <div>
+                            <span className="text-xl text-black block">{uploadedFiles.length} files selected</span>
+                            <span className="text-sm text-gray-500">{uploadedFiles.map(f => f.name).join(', ')}</span>
+                          </div>
+                        ) : (
+                          <span className="text-xl text-black truncate block max-w-[200px] mx-auto">{fileName}</span>
+                        )}
                       </div>
                     ) : (
                       <div className="text-center">
@@ -388,9 +584,9 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
               <div className="p-6 border-t border-gray-100">
                 <button
                   onClick={analyzeAndStoreResume}
-                  disabled={!jd || !uploadedFile || isProcessing}
+                  disabled={(!jd || (!uploadedFile && uploadedFiles.length === 0) || isProcessing)}
                   className={`w-full py-3 rounded-lg font-semibold transition-all ${
-                    jd && uploadedFile && !isProcessing
+                    jd && (uploadedFile || uploadedFiles.length > 0) && !isProcessing
                       ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md"
                       : "bg-gray-200 text-gray-500 cursor-not-allowed"
                   }`}
@@ -404,7 +600,9 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                       Analyzing & Storing...
                     </span>
                   ) : (
-                    "🎯 Analyze & Store Resume"
+                    uploadedFiles.length > 1 
+                      ? `🎯 Analyze & Store ${uploadedFiles.length} Resumes`
+                      : "🎯 Analyze & Store Resume"
                   )}
                 </button>
               </div>
@@ -587,8 +785,8 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
             <div className="p-6 text-center border-b border-gray-100">
               <div className="text-3xl mb-2">🔒</div>
-              <h2 className="text-2xl font-bold text-gray-900">Free Trials Used</h2>
-              <p className="text-gray-600 mt-1">You've used your {MAX_FREE_TRIALS} free analyses. Unlock unlimited access.</p>
+              <h2 className="text-2xl font-bold text-gray-900">Unlock Full Access</h2>
+              <p className="text-gray-600 mt-1">Upgrade to unlock unlimited resume analyses.</p>
             </div>
 
             <div className="p-6">
@@ -626,5 +824,11 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
         </div>
       )}
     </div>
+    </div>
   );
 }
+
+
+
+
+

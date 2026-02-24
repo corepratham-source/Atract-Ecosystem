@@ -49,6 +49,12 @@ function getCityMultiplier(location) {
   return 1;
 }
 
+// Format number as Indian currency string
+function formatSalary(amount) {
+  if (!amount) return null;
+  return "₹" + amount.toLocaleString("en-IN");
+}
+
 router.post("/generate", async (req, res) => {
   try {
     const { role, location, experience, salary } = req.body;
@@ -82,7 +88,15 @@ router.post("/generate", async (req, res) => {
       recommendation = "Strong offer. Leverage for quick close. Ensure internal pay parity for similar roles.";
     }
 
+    // Return flat fields matching what the client expects
     res.json({
+      // Flat fields for client compatibility
+      min: formatSalary(min),
+      max: formatSalary(max),
+      median: formatSalary(mid),
+      salary: offered ? formatSalary(offered) : null,
+      
+      // Additional fields (keep for backward compatibility)
       range: { min, mid, max },
       offered: offered || null,
       verdict,
