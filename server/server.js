@@ -239,34 +239,31 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));                    // JSON payloads up to 10MB
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Form data up to 10MB
 
-// CORS configuration - accepts requests from any origin in production
-// In development, it accepts localhost ports
-// Set CLIENT_URL environment variable for production deployments
+// CORS configuration - Fully dynamic for any deployment
+// In development: accepts localhost ports (5173, 5174, 5000)
+// In production: accepts ANY origin (works on any domain/platform)
+const isProduction = process.env.NODE_ENV === 'production';
+
 const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps or curl requests)
-    // In production, you might want to be more restrictive
     if (!origin) {
       return callback(null, true);
     }
     
-    // Development origins
+    // In production, allow any origin
+    if (isProduction) {
+      return callback(null, true);
+    }
+    
+    // Development origins only
     const devOrigins = [
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:5000'
     ];
     
-    // Production origin from environment variable
-    const productionOrigin = process.env.CLIENT_URL;
-    
-    // Check if origin is allowed
-    const allowedOrigins = [...devOrigins];
-    if (productionOrigin) {
-      allowedOrigins.push(productionOrigin);
-    }
-    
-    if (allowedOrigins.indexOf(origin) !== -1 || devOrigins.some(o => origin?.startsWith(o)) || origin?.includes('onrender.com')) {
+    if (devOrigins.some(o => origin?.startsWith(o))) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
