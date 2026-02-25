@@ -431,47 +431,88 @@ app.delete("/apps/:id", async (req, res) => {
 });
 
 // Serve React build - try multiple possible paths for Render compatibility
+const fs = require('fs');
 let clientBuildPath;
-try {
-  // Try the direct path first
-  clientBuildPath = path.join(__dirname, '../client/dist');
-  require('fs').accessSync(clientBuildPath); // Verify it exists
-} catch (e) {
-  // Try alternative paths
-  try {
-    clientBuildPath = path.join(__dirname, 'client/dist');
-    require('fs').accessSync(clientBuildPath);
-  } catch (e2) {
-    // Last resort - try the original
-    clientBuildPath = path.join(__dirname, '../client/dist');
+
+const possiblePaths = [
+  path.join(__dirname, "../client/dist"),
+  path.join(__dirname, "../../client/dist"),
+  path.join(__dirname, "client/dist"),
+  path.join(process.cwd(), "../client/dist"),
+  path.join(process.cwd(), "client/dist")
+];
+
+for (const p of possiblePaths) {
+  if (fs.existsSync(p)) {
+    clientBuildPath = p;
+    console.log("React build found at:", clientBuildPath);
+    break;
   }
 }
 
-console.log('Serving static files from:', clientBuildPath);
+if (!clientBuildPath) {
+  console.error("React build NOT found in any of these locations:");
+  possiblePaths.forEach(p => console.error(" - ", p));
+}
 
-// Serve static files with proper MIME types
-app.use(express.static(clientBuildPath, {
-  maxAge: '1h', // Cache static assets for 1 hour
-  etag: true,
-  lastModified: true
-}));
-
-// Also serve the client/public folder for service worker and manifest
-const publicPath = path.join(__dirname, '../client/public');
-app.use(express.static(publicPath));
-
-// React Router fallback - ONLY for HTML pages, NOT for static assets
-// This regex matches HTML pages but NOT:
-// - /api/* routes
-// - /assets/* (CSS, JS, images)
-// - Files with extensions (.js, .css, .png, .jpg, .svg, .ico, .woff, etc.)
-app.get(/^\/(?!api\/|assets\/)[^.]*$/, (req, res) => {
-  res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
-    if (err) {
-      console.error('Error sending index.html:', err);
-      res.status(404).send("ATRact Backend Running - Please build frontend or use /api");
+// Serve static files with explicit MIME types
+if (clientBuildPath) {
+  app.use(express.static(clientBuildPath, {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      // Force proper MIME types
+      if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (filePath.endsWith('.ico')) {
+        res.setHeader('Content-Type', 'image/x-icon');
+      } else if (filePath.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json');
+      } else if (filePath.endsWith('.woff')) {
+        res.setHeader('Content-Type', 'font/woff');
+      } else if (filePath.endsWith('.woff2')) {
+        res.setHeader('Content-Type', 'font/woff2');
+      }
     }
-  });
+  }));
+
+  // Also serve the client/public folder for service worker and manifest
+  const publicPath = path.join(__dirname, "../client/public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+}
+
+// React router fallback - serve index.html for non-API routes
+app.get("*", (req, res) => {
+  if (req.originalUrl.startsWith("/api")) {
+    return res.status(404).json({ error: "API route not found" });
+  }
+
+  // Don't handle requests with file extensions - let them 404
+  if (req.originalUrl.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$/)) {
+    return res.status(404).send("File not found");
+  }
+
+  if (clientBuildPath) {
+    res.sendFile(path.join(clientBuildPath, "index.html"), (err) => {
+      if (err) {
+        console.error('Error sending index.html:', err);
+        res.status(500).send("Error loading application");
+      }
+    });
+  } else {
+    res.status(500).send("React build not found. Please deploy the frontend.");
+  }
 });
 
 // 404 fallback

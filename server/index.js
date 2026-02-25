@@ -470,26 +470,70 @@ app.use("/api/resume", resumeRoutes);
 // ================= SERVE FRONTEND =================
 
 
-// React build path
+// React build path - try multiple possible paths for Render compatibility
 
-const clientPath = path.join(__dirname, "../client/dist");
+let clientPath;
 
+const possiblePaths = [
+  path.join(__dirname, "../client/dist"),
+  path.join(__dirname, "../../client/dist"),
+  path.join(__dirname, "client/dist"),
+  path.join(process.cwd(), "../client/dist"),
+  path.join(process.cwd(), "client/dist")
+];
 
-// check exists
+for (const p of possiblePaths) {
+  if (fs.existsSync(p)) {
+    clientPath = p;
+    console.log("React build found at:", clientPath);
+    break;
+  }
+}
 
-if (!fs.existsSync(clientPath)) {
+if (!clientPath) {
+  console.error("React build NOT found in any of these locations:");
+  possiblePaths.forEach(p => console.error(" - ", p));
+}
 
-  console.log("React build not found");
+// serve static files with explicit MIME types
+if (clientPath) {
+  app.use(express.static(clientPath, {
+    maxAge: '1h',
+    etag: true,
+    lastModified: true,
+    setHeaders: (res, filePath) => {
+      // Force proper MIME types
+      if (filePath.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      } else if (filePath.endsWith('.js')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+      } else if (filePath.endsWith('.jpg') || filePath.endsWith('.jpeg')) {
+        res.setHeader('Content-Type', 'image/jpeg');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+      } else if (filePath.endsWith('.ico')) {
+        res.setHeader('Content-Type', 'image/x-icon');
+      } else if (filePath.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json');
+      } else if (filePath.endsWith('.woff')) {
+        res.setHeader('Content-Type', 'font/woff');
+      } else if (filePath.endsWith('.woff2')) {
+        res.setHeader('Content-Type', 'font/woff2');
+      }
+    }
+  }));
 
+  // Also serve the client/public folder for service worker and manifest
+  const publicPath = path.join(__dirname, "../client/public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
 }
 
 
-// serve static
-
-app.use(express.static(clientPath));
-
-
-// React router fallback
+// React router fallback - serve index.html for non-API routes
 
 app.get("*", (req, res) => {
 
@@ -499,8 +543,21 @@ app.get("*", (req, res) => {
 
   }
 
-  res.sendFile(path.join(clientPath, "index.html"));
+  // Don't handle requests with file extensions - let them 404
+  if (req.originalUrl.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$/)) {
+    return res.status(404).send("File not found");
+  }
 
+  if (clientPath) {
+    res.sendFile(path.join(clientPath, "index.html"), (err) => {
+      if (err) {
+        console.error('Error sending index.html:', err);
+        res.status(500).send("Error loading application");
+      }
+    });
+  } else {
+    res.status(500).send("React build not found. Please deploy the frontend.");
+  }
 });
 
 

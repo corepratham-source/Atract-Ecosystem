@@ -1,9 +1,9 @@
 // Service Worker for ATRact PWA
 // Provides offline support and caching strategies
 
-const CACHE_NAME = 'atract-v3';
-const STATIC_CACHE = 'atract-static-v3';
-const DYNAMIC_CACHE = 'atract-dynamic-v3';
+const CACHE_NAME = 'atract-v4';
+const STATIC_CACHE = 'atract-static-v4';
+const DYNAMIC_CACHE = 'atract-dynamic-v4';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
