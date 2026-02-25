@@ -493,11 +493,8 @@ if (clientBuildPath) {
 }
 
 // React router fallback - serve index.html for non-API routes
-app.get("*", (req, res) => {
-  if (req.originalUrl.startsWith("/api")) {
-    return res.status(404).json({ error: "API route not found" });
-  }
-
+// Use regex pattern instead of * wildcard for Express 5 compatibility
+app.get(/^(?!\/api\/).*$/, (req, res) => {
   // Don't handle requests with file extensions - let them 404
   if (req.originalUrl.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$/)) {
     return res.status(404).send("File not found");
