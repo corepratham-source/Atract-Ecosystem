@@ -475,9 +475,13 @@ app.use("/api/resume", resumeRoutes);
 let clientPath;
 
 const possiblePaths = [
+  path.join(__dirname, "dist"),
+  path.join(__dirname, "../dist"),
   path.join(__dirname, "../client/dist"),
   path.join(__dirname, "../../client/dist"),
   path.join(__dirname, "client/dist"),
+  path.join(process.cwd(), "dist"),
+  path.join(process.cwd(), "../dist"),
   path.join(process.cwd(), "../client/dist"),
   path.join(process.cwd(), "client/dist")
 ];
