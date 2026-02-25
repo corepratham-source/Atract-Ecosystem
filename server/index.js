@@ -534,12 +534,8 @@ if (clientPath) {
 
 
 // React router fallback - serve index.html for non-API routes
-// Use regex pattern instead of * wildcard for Express 5 compatibility
-app.get(/^(?!\/api\/).*$/, (req, res) => {
-  // Don't handle requests with file extensions - let them 404
-  if (req.originalUrl.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$/)) {
-    return res.status(404).send("File not found");
-  }
+// Only match routes WITHOUT file extensions (let express.static handle those)
+app.get(/^(?!/api/)(?!.*\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$)/, (req, res) => {
 
   if (clientPath) {
     res.sendFile(path.join(clientPath, "index.html"), (err) => {
