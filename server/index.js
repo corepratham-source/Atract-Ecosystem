@@ -535,7 +535,7 @@ if (clientPath) {
 
 // React router fallback - serve index.html for non-API routes
 // Only match routes WITHOUT file extensions (let express.static handle those)
-app.get(/^(?!/api/)(?!.*\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$)/, (req, res) => {
+app.get(/^(?!\/api\/)(?!.*\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2|gif|webp)$)/, (req, res) => {
 
   if (clientPath) {
     res.sendFile(path.join(clientPath, "index.html"), (err) => {
