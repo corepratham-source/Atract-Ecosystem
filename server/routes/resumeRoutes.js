@@ -1,318 +1,376 @@
-
 const express = require("express");
 const router = express.Router();
-const multer = require("multer");
+const multiparty = require('multiparty');
+const fs = require('fs');
 const Resume = require("../models/Resume");
 
-// PDF text extraction using pdf-parse 
-// Install: npm install pdf-parse
-// This is the most reliable Node.js PDF text extractor
+// PDF text extraction
 let pdfParse;
 try {
   pdfParse = require("pdf-parse");
-  console.log("[Resume] pdf-parse loaded successfully");
+  console.log("[Resume] pdf-parse loaded");
 } catch (e) {
-  console.warn("[Resume] pdf-parse not installed. Run: npm install pdf-parse");
+  console.warn("[Resume] pdf-parse missing → npm install pdf-parse");
 }
 
-// DOCX text extraction using mammoth 
+// DOCX extraction
 let mammoth;
 try {
   mammoth = require("mammoth");
 } catch (e) {
-  console.warn("[Resume] mammoth not installed. Run: npm install mammoth");
+  console.warn("[Resume] mammoth missing → npm install mammoth");
 }
 
-// Store files in memory so we can extract text before saving to DB
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, 
-  fileFilter: (req, file, cb) => {
-    const allowed = [
-      "application/pdf",
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      "application/msword",
-      "text/plain",
-    ];
-    if (allowed.includes(file.mimetype) ||
-        file.originalname.match(/\.(pdf|docx|doc|txt)$/i)) {
-      cb(null, true);
-    } else {
-      cb(new Error("Only PDF, DOCX, DOC, and TXT files are allowed"));
+// OCR
+let tesseract;
+try {
+  tesseract = require("tesseract.js");
+  console.log("[Resume] tesseract.js loaded for OCR");
+} catch (e) {
+  console.warn("[Resume] tesseract.js missing → npm install tesseract.js");
+}
+
+// ────────────────────────────────────────────────
+// OCR fallback
+// ────────────────────────────────────────────────
+async function extractTextWithOCR(buffer) {
+  if (!tesseract) {
+    throw new Error("OCR not available – install tesseract.js");
+  }
+  try {
+    console.log("[OCR] Starting...");
+    const { data } = await tesseract.recognize(buffer, "eng", {
+      logger: m => console.log(`[OCR] ${Math.round(m.progress*100)}%`),
+    });
+    const text = (data.text || "").trim();
+    console.log(`[OCR] Done – ${text.length} chars`);
+    if (text.length < 30) {
+      throw new Error("OCR extracted almost no text");
     }
-  },
-});
+    return { text, method: "ocr", isImageBased: true };
+  } catch (err) {
+    console.error("[OCR] Failed:", err.message);
+    throw err;
+  }
+}
 
-//  Text extraction function 
-async function extractTextFromBuffer(buffer, mimetype, filename) {
-  const ext = (filename || "").toLowerCase().split(".").pop();
+// ────────────────────────────────────────────────
+// Main text extraction logic
+// ────────────────────────────────────────────────
+async function extractTextFromBuffer(buffer, mimetype, filename = "") {
+  const ext = filename.toLowerCase().split(".").pop();
 
-  // PDF extraction
+  // Images → force OCR
+  if (mimetype && mimetype.startsWith("image/")) {
+    return extractTextWithOCR(buffer);
+  }
+
+  // PDF
   if (mimetype === "application/pdf" || ext === "pdf") {
-    if (!pdfParse) throw new Error("pdf-parse not installed. Run: npm install pdf-parse");
+    if (!pdfParse) throw new Error("pdf-parse not installed");
+
     try {
       const data = await pdfParse(buffer);
-      const text = data.text || "";
-      console.log(`[TextExtract] PDF extracted: ${text.length} chars, ${data.numpages} pages`);
-      console.log(`[TextExtract] PDF text preview:\n${text.substring(0, 500)}`);
-      
-      // Check if extracted text is too short - likely a scanned/image PDF
-      if (text.trim().length < 50) {
-        console.warn("[TextExtract] PDF appears to be scanned/image-based - very little text extracted");
-        // Return a special indicator for scanned PDF
-        return { text: "", method: "scanned-pdf", isScanned: true, error: "This PDF appears to be a scanned document or image-based PDF. Please convert to a text-based PDF or DOCX format for better results." };
-      }
-      
-      // Check text quality - if it contains mostly special characters, it's likely scanned
+      let text = (data.text || "").trim();
+
       const alphaRatio = (text.match(/[a-zA-Z]/g) || []).length / (text.length || 1);
-      if (alphaRatio < 0.3) {
-        console.warn("[TextExtract] PDF has low text quality - likely scanned");
-        return { text: "", method: "scanned-pdf", isScanned: true, error: "This PDF appears to contain primarily images or scanned content. Please use a text-based PDF or convert to DOCX format." };
+
+      // Heuristic: likely scanned / image PDF
+      if (text.length < 120 || alphaRatio < 0.38) {
+        console.warn(`[PDF] Suspicious – ${text.length} chars, alpha ${alphaRatio.toFixed(2)} → trying OCR`);
+        if (tesseract) {
+          return await extractTextWithOCR(buffer);
+        }
+        return {
+          text: "",
+          method: "pdf-scanned-no-ocr",
+          isScanned: true,
+          error: "Likely scanned PDF – OCR not available"
+        };
       }
-      
+
       return { text, method: "pdf-parse" };
     } catch (err) {
-      console.error("[TextExtract] PDF parse error:", err.message);
-      throw err;
-    }
-  }
+      console.error("[PDF] parse error:", err.message);
 
-  // DOCX extraction
-  if (mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-      ext === "docx") {
-    if (!mammoth) throw new Error("mammoth not installed. Run: npm install mammoth");
-    try {
-      const result = await mammoth.extractRawText({ buffer });
-      const text = result.value || "";
-      console.log(`[TextExtract] DOCX extracted: ${text.length} chars`);
-      console.log(`[TextExtract] DOCX text preview:\n${text.substring(0, 500)}`);
-      if (text.trim().length < 50) {
-        throw new Error("DOCX text extraction returned very little text");
+      const msg = err.message.toLowerCase();
+
+      if (msg.includes("stream ended") || msg.includes("unexpected end")) {
+        if (tesseract) {
+          console.log("[PDF] stream error → falling back to OCR");
+          return await extractTextWithOCR(buffer);
+        }
+        throw new Error("PDF appears corrupted or incomplete (stream ended)");
       }
-      return { text, method: "mammoth" };
-    } catch (err) {
-      console.error("[TextExtract] DOCX parse error:", err.message);
+
+      if (msg.includes("password") || msg.includes("encrypted")) {
+        throw new Error("PDF is password protected");
+      }
+
       throw err;
     }
   }
 
-  // Plain text
+  // DOCX
+  if (mimetype === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || ext === "docx") {
+    if (!mammoth) throw new Error("mammoth not installed");
+    const { value } = await mammoth.extractRawText({ buffer });
+    return { text: (value || "").trim(), method: "mammoth" };
+  }
+
+  // TXT
   if (mimetype === "text/plain" || ext === "txt") {
-    const text = buffer.toString("utf-8");
-    console.log(`[TextExtract] TXT: ${text.length} chars`);
-    return { text, method: "plain-text" };
+    return { text: buffer.toString("utf-8").trim(), method: "text" };
   }
 
-  // DOC (old format) — basic extraction
-  if (ext === "doc") {
-    // Try mammoth for old .doc format
-    if (mammoth) {
-      try {
-        const result = await mammoth.extractRawText({ buffer });
-        return { text: result.value || "", method: "mammoth" };
-      } catch (_) {}
-    }
-    // Fallback: read as buffer and strip binary
-    const raw = buffer.toString("latin1");
-    const text = raw.replace(/[^\x20-\x7E\n\r\t]/g, " ").replace(/\s{3,}/g, " ").trim();
-    return { text, method: "fallback" };
-  }
+  // Fallback for other formats (basic stripping)
+  const raw = buffer.toString("utf-8");
+  const cleaned = raw
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 
-  throw new Error(`Unsupported file type: ${mimetype} / .${ext}`);
+  return { text: cleaned, method: "fallback" };
 }
 
-// POST /upload — upload and store a resume 
-// Supports both:
-//   1. multipart/form-data with file field "resume" (server-side extraction)
-//   2. application/json with { name, text } (client-side extraction)
-router.post("/upload", (req, res, next) => {
-  // If content-type is JSON, skip multer and go straight to handler
-  const ct = (req.headers["content-type"] || "").toLowerCase();
-  if (ct.includes("application/json")) {
-    return next();
-  }
-  // Otherwise, use multer for file upload
-  upload.single("resume")(req, res, next);
-}, async (req, res) => {
-  try {
-    let cleanedText, resumeName, resumeEmail, resumeFilename, resumeFilesize;
-    let extractedMethod = "unknown";
-
-    if (req.file) {
-      // ── Multipart file upload: extract text server-side ──
-      const { originalname, mimetype, buffer, size } = req.file;
-      const { name, email } = req.body;
-
-      console.log(`\n[Resume] File Upload: ${originalname} | ${mimetype} | ${size} bytes`);
-
-      let extracted;
-      let extractedMethod = "unknown";
-      try {
-        const result = await extractTextFromBuffer(buffer, mimetype, originalname);
-        
-        // Handle scanned PDF specially
-        if (result.isScanned) {
-          return res.status(422).json({
-            error: result.error || "Scanned PDF detected",
-            suggestion: "Please convert your scanned PDF to a text-based PDF or DOCX format. You can use tools like Adobe Acrobat or online converters.",
-            isScanned: true
-          });
-        }
-        
-        extracted = result.text;
-        extractedMethod = result.method;
-      } catch (extractErr) {
-        console.error("[Resume] Text extraction failed:", extractErr.message);
-        return res.status(422).json({
-          error: `Text extraction failed: ${extractErr.message}`,
-          suggestion: "Please ensure the file is not password-protected or a scanned image PDF. Try converting to DOCX or TXT format.",
-        });
-      }
-
-      cleanedText = extracted
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
-        .replace(/\n{4,}/g, "\n\n")
-        .replace(/[ \t]{3,}/g, " ")
-        .trim();
-
-      resumeName = name || originalname.replace(/\.[^.]+$/, "");
-      resumeEmail = email || "";
-      resumeFilename = originalname;
-      resumeFilesize = size;
-    } else if (req.body && req.body.text) {
-      //  JSON upload: text already extracted client-side 
-      const { name, email, text } = req.body;
-      console.log(`\n[Resume] JSON Upload: name=${name} | textLen=${text.length}`);
-
-      cleanedText = text
-        .replace(/\r\n/g, "\n")
-        .replace(/\r/g, "\n")
-        .replace(/\n{4,}/g, "\n\n")
-        .replace(/[ \t]{3,}/g, " ")
-        .trim();
-
-      resumeName = name || "Uploaded Resume";
-      resumeEmail = email || "";
-      resumeFilename = name || "";
-      resumeFilesize = Buffer.byteLength(cleanedText, "utf-8");
-      extractedMethod = "client-side";
-    } else {
-      return res.status(400).json({ error: "No file or text provided. Upload a file or send { name, text } as JSON." });
-    }
-
-    console.log(`[Resume] Cleaned text: ${cleanedText.length} chars`);
-    console.log(`[Resume] Text sample:\n---\n${cleanedText.substring(0, 600)}\n---`);
-
-    if (cleanedText.length < 50) {
-      return res.status(422).json({
-        error: "Could not extract meaningful text from this file",
-        suggestion: "The file may be a scanned image PDF. Please use a text-based PDF or convert to DOCX.",
+// ────────────────────────────────────────────────
+// POST /upload – Resume (using multiparty)
+// ────────────────────────────────────────────────
+router.post("/upload", (req, res) => {
+  const form = new multiparty.Form({
+    maxFieldsSize: 10 * 1024 * 1024,
+    maxFilesSize: 10 * 1024 * 1024
+  });
+  
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("[Resume Upload] Parse error:", err.message);
+      return res.status(400).json({ 
+        error: "File upload failed: " + err.message,
+        suggestion: "Please try again with a smaller file" 
       });
     }
-
-    // Save to database
-    const resume = new Resume({
-      name: resumeName,
-      email: resumeEmail,
-      text: cleanedText,
-      filename: resumeFilename,
-      filesize: resumeFilesize,
-    });
-
-    await resume.save();
-    console.log(`[Resume] Saved to DB: ${resume._id} | text length: ${cleanedText.length}`);
-
-    return res.json({
-      success: true,
-      id: resume._id,
-      name: resume.name,
-      email: resume.email,
-      textLength: cleanedText.length,
-      text: cleanedText,  
-      textPreview: cleanedText.substring(0, 200) + "...",
-      extractionMethod: extractedMethod,
-      message: `Resume uploaded successfully. Extracted ${cleanedText.length} characters of text.`,
-    });
-  } catch (err) {
-    console.error("[Resume] Upload error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// POST /upload-jd — extract text from uploaded JD file 
-router.post("/upload-jd", upload.single("jd"), async (req, res) => {
-  try {
-    if (!req.file) {
+    
+    // Check for JSON body (client-side extracted text)
+    const textField = fields.text ? fields.text[0] : null;
+    const nameField = fields.name ? fields.name[0] : null;
+    const emailField = fields.email ? fields.email[0] : null;
+    
+    if (textField) {
+      // JSON fallback (client-extracted text)
+      if (!textField.trim()) {
+        return res.status(400).json({ error: "No file or text provided" });
+      }
+      
+      // Check if MongoDB is connected
+      const mongoose = require("mongoose");
+      if (mongoose.connection.readyState !== 1) {
+        console.warn("[Resume Upload] MongoDB not connected");
+        return res.status(503).json({ 
+          error: "Database not connected - cannot save resume",
+          suggestion: "Please connect to MongoDB to save resumes"
+        });
+      }
+      
+      const cleaned = textField.trim().replace(/\n{4,}/g, "\n\n").replace(/[ \t]{3,}/g, " ");
+      const resume = new Resume({
+        name: nameField || "Resume",
+        email: emailField || "",
+        text: cleaned,
+        filename: "",
+        filesize: Buffer.byteLength(cleaned, "utf-8"),
+      });
+      await resume.save();
+      return res.json({
+        success: true,
+        id: resume._id,
+        name: resume.name,
+        email: resume.email,
+        text: cleaned,  // Always include text field
+        textLength: cleaned.length,
+        extractionMethod: "client",
+      });
+    }
+    
+    // File upload
+    const resumeFiles = files.resume;
+    if (!resumeFiles || resumeFiles.length === 0) {
       return res.status(400).json({ error: "No file uploaded" });
     }
-
-    const { originalname, mimetype, buffer } = req.file;
-    console.log(`\n[JD] Upload: ${originalname} | ${mimetype}`);
-
-    // Extract text from buffer
-    const extracted = await extractTextFromBuffer(buffer, mimetype, originalname);
     
-    // Validate extracted result
-    if (!extracted || typeof extracted !== 'object') {
-      console.error("[JD] Invalid extraction result:", extracted);
-      return res.status(422).json({ error: "Failed to extract text from file - invalid result" });
+    const file = resumeFiles[0];
+    const originalname = file.originalFilename;
+    const mimetype = file.headers['content-type'];
+    
+    try {
+      const buffer = fs.readFileSync(file.path);
+      const result = await extractTextFromBuffer(buffer, mimetype, originalname);
+      
+      if (result.isScanned) {
+        return res.status(422).json({
+          error: result.error || "Scanned document – no text layer",
+          suggestion: "Use OCR to make it searchable or upload text-based version",
+          isScanned: true,
+        });
+      }
+      
+      const cleaned = result.text
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\n{4,}/g, "\n\n")
+        .replace(/[ \t]{3,}/g, " ")
+        .trim();
+        
+      if (cleaned.length < 60) {
+        return res.status(422).json({
+          error: "Very little meaningful text extracted",
+          suggestion: "File may be empty, image-only or corrupted",
+        });
+      }
+      
+      // Check if MongoDB is connected
+      const mongoose = require("mongoose");
+      if (mongoose.connection.readyState !== 1) {
+        console.warn("[Resume Upload] MongoDB not connected");
+        return res.status(503).json({ 
+          error: "Database not connected - cannot save resume",
+          suggestion: "Please connect to MongoDB to save resumes"
+        });
+      }
+      
+      const resume = new Resume({
+        name: nameField || originalname.replace(/\.[^.]+$/, ""),
+        email: emailField || "",
+        text: cleaned,
+        filename: originalname,
+        filesize: buffer.length,
+      });
+      
+      await resume.save();
+      
+      res.json({
+        success: true,
+        id: resume._id,
+        name: resume.name,
+        email: resume.email,
+        text: cleaned,
+        textLength: cleaned.length,
+        extractionMethod: result.method,
+      });
+    } catch (err) {
+      console.error("[Resume Upload] Error:", err.message);
+      res.status(500).json({ error: "Server error during resume processing" });
     }
-    
-    if (typeof extracted.text !== 'string') {
-      console.error("[JD] Extracted text is not a string:", typeof extracted.text, extracted);
-      return res.status(422).json({ error: "Failed to extract text from file - invalid text format" });
-    }
-    
-    const extractedText = extracted.text;
-
-    const cleanedText = extractedText
-      .replace(/\r\n/g, "\n").replace(/\r/g, "\n")
-      .replace(/\n{4,}/g, "\n\n").replace(/[ \t]{3,}/g, " ").trim();
-
-    console.log(`[JD] Extracted ${cleanedText.length} chars`);
-    console.log(`[JD] Preview:\n${cleanedText.substring(0, 400)}`);
-
-    return res.json({
-      success: true,
-      text: cleanedText,
-      textLength: cleanedText.length,
-      textPreview: cleanedText.substring(0, 300),
-    });
-  } catch (err) {
-    console.error("[JD] Upload error:", err);
-    res.status(500).json({ error: err.message });
-  }
+  });
 });
 
-//  GET /my — get current user's resumes by email 
-router.get("/my", async (req, res) => {
-  try {
-    const { email } = req.query;
-    if (!email) {
-      return res.status(400).json({ error: "Email is required" });
+// ────────────────────────────────────────────────
+// POST /upload-jd – Job Description (using multiparty)
+// ────────────────────────────────────────────────
+router.post("/upload-jd", (req, res) => {
+  const form = new multiparty.Form({
+    maxFieldsSize: 10 * 1024 * 1024,
+    maxFilesSize: 10 * 1024 * 1024
+  });
+  
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error("[JD Upload] Parse error:", err.message);
+      return res.status(400).json({ 
+        error: "File upload failed: " + err.message,
+        suggestion: "Please try again with a smaller file" 
+      });
     }
-    const resumes = await Resume.find({ email: String(email).trim().toLowerCase() })
-      .select("name email filename createdAt")
-      .sort({ createdAt: -1 });
-    res.json(resumes.map((r) => ({
-      id: r._id,
-      name: r.name,
-      email: r.email,
-      filename: r.filename,
-      createdAt: r.createdAt,
-      matchPercentage: null,
-    })));
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+    
+    const jdFiles = files.jd;
+    if (!jdFiles || jdFiles.length === 0) {
+      return res.status(400).json({ 
+        error: "No job description file uploaded",
+        suggestion: "Please select a file to upload"
+      });
+    }
+    
+    const file = jdFiles[0];
+    const originalname = file.originalFilename;
+    const mimetype = file.headers['content-type'];
+    
+    console.log("[JD Upload] Processing:", originalname, mimetype);
+    
+    try {
+      const buffer = fs.readFileSync(file.path);
+      const result = await extractTextFromBuffer(buffer, mimetype, originalname);
+      
+      if (result.isScanned) {
+        return res.status(422).json({
+          error: "Scanned / image-based document",
+          suggestion: "Convert to text-searchable PDF using OCR tools",
+          isScanned: true,
+        });
+      }
+      
+      const cleaned = result.text
+        .replace(/\r\n/g, "\n")
+        .replace(/\r/g, "\n")
+        .replace(/\n{4,}/g, "\n\n")
+        .replace(/[ \t]{3,}/g, " ")
+        .trim();
+        
+      if (cleaned.length < 50) {
+        return res.status(422).json({
+          error: "Could not extract enough text",
+          suggestion: "File may be empty, scanned, or corrupted",
+        });
+      }
+      
+      console.log("[JD Upload] Success - extracted", cleaned.length, "chars");
+      
+      res.json({
+        success: true,
+        text: cleaned,
+        textLength: cleaned.length,
+        extractionMethod: result.method,
+      });
+    } catch (err) {
+      console.error("[JD Upload] Error:", err.message);
+      
+      let errorMsg = "Failed to read job description file";
+      let suggestion = "Please paste the JD text directly or try another file";
+      
+      if (err.message.includes("password")) {
+        errorMsg = "PDF is password protected";
+        suggestion = "Remove password and retry";
+      } else if (err.message.includes("stream ended") || err.message.includes("corrupted")) {
+        errorMsg = "File appears corrupted or not a valid PDF";
+      } else if (err.isScanned) {
+        errorMsg = "Scanned / image-only document";
+        suggestion = "Convert using OCR (smallpdf, Adobe, etc.)";
+      }
+      
+      res.status(422).json({ error: errorMsg, suggestion });
+    }
+  });
 });
 
-//GET /resumes — list all stored resumes 
+// ────────────────────────────────────────────────
+// GET / – List all resumes
+// ────────────────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    const resumes = await Resume.find().select("name email filename textLength createdAt");
+    // Check if MongoDB is connected
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.warn("[Resume GET /] MongoDB not connected, returning empty list");
+      return res.json({
+        count: 0,
+        resumes: [],
+        message: "Database not connected - demo mode"
+      });
+    }
+    
+    const resumes = await Resume.find()
+      .select("name email filename textLength createdAt")
+      .sort({ createdAt: -1 });
+    
     res.json({
       count: resumes.length,
       resumes: resumes.map((r) => ({
@@ -325,32 +383,99 @@ router.get("/", async (req, res) => {
       })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Resume GET /] Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch resumes" });
   }
 });
 
-//  DELETE /resumes/:id
-router.delete("/:id", async (req, res) => {
+// GET /my – Get resumes by email
+// ────────────────────────────────────────────────
+router.get("/my", async (req, res) => {
   try {
-    await Resume.findByIdAndDelete(req.params.id);
-    res.json({ success: true, message: "Resume deleted" });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-//  GET /resumes/:id/text — debug: see extracted text for a resume
-router.get("/:id/text", async (req, res) => {
-  try {
-    const resume = await Resume.findById(req.params.id).select("name text");
-    if (!resume) return res.status(404).json({ error: "Resume not found" });
+    const email = req.query.email;
+    if (!email) {
+      return res.status(400).json({ error: "Email parameter is required" });
+    }
+    
+    // Check if MongoDB is connected
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.warn("[Resume GET /my] MongoDB not connected, returning empty list");
+      return res.json({
+        count: 0,
+        resumes: [],
+        message: "Database not connected - demo mode"
+      });
+    }
+    
+    const resumes = await Resume.find({ email })
+      .select("name email filename textLength createdAt")
+      .sort({ createdAt: -1 });
+    
     res.json({
-      name: resume.name,
-      textLength: resume.text?.length || 0,
-      text: resume.text,
+      count: resumes.length,
+      resumes: resumes.map((r) => ({
+        id: r._id,
+        name: r.name,
+        email: r.email,
+        filename: r.filename,
+        textLength: r.text?.length || 0,
+        createdAt: r.createdAt,
+      })),
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error("[Resume GET /my] Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch resumes" });
+  }
+});
+
+// GET /:id – Get single resume by ID
+router.get("/:id", async (req, res) => {
+  try {
+    // Check if MongoDB is connected
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.warn("[Resume GET /:id] MongoDB not connected");
+      return res.status(503).json({ error: "Database not connected - demo mode" });
+    }
+    
+    const resume = await Resume.findById(req.params.id);
+    if (!resume) {
+      return res.status(404).json({ error: "Resume not found" });
+    }
+    res.json({
+      id: resume._id,
+      name: resume.name,
+      email: resume.email,
+      text: resume.text,
+      filename: resume.filename,
+      textLength: resume.text?.length || 0,
+      createdAt: resume.createdAt,
+    });
+  } catch (err) {
+    console.error("[Resume GET /:id] Error:", err.message);
+    res.status(500).json({ error: "Failed to fetch resume" });
+  }
+});
+
+// DELETE /:id – Delete a resume
+router.delete("/:id", async (req, res) => {
+  try {
+    // Check if MongoDB is connected
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.warn("[Resume DELETE /:id] MongoDB not connected");
+      return res.status(503).json({ error: "Database not connected - demo mode" });
+    }
+    
+    const resume = await Resume.findByIdAndDelete(req.params.id);
+    if (!resume) {
+      return res.status(404).json({ error: "Resume not found" });
+    }
+    res.json({ success: true, message: "Resume deleted" });
+  } catch (err) {
+    console.error("[Resume DELETE /:id] Error:", err.message);
+    res.status(500).json({ error: "Failed to delete resume" });
   }
 });
 

@@ -1,9 +1,9 @@
 // Service Worker for ATRact PWA
 // Provides offline support and caching strategies
 
-const CACHE_NAME = 'atract-v1';
-const STATIC_CACHE = 'atract-static-v1';
-const DYNAMIC_CACHE = 'atract-dynamic-v1';
+const CACHE_NAME = 'atract-v3';
+const STATIC_CACHE = 'atract-static-v3';
+const DYNAMIC_CACHE = 'atract-dynamic-v3';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -66,9 +66,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets - Cache First strategy
-  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2)$/)) {
+  // Static assets in /public - Cache First strategy (but not /src files)
+  if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2)$/) && !url.pathname.startsWith('/src')) {
     event.respondWith(cacheFirst(request));
+    return;
+  }
+
+  // JS files from /src directory - Network First (for development)
+  if (url.pathname.startsWith('/src/')) {
+    event.respondWith(networkFirst(request));
     return;
   }
 

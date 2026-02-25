@@ -238,7 +238,6 @@ const app = express();
 // ────────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));                    // JSON payloads up to 10MB
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Form data up to 10MB
-app.use(express.raw({ limit: '10mb', type: '*/*' }));        // Raw bodies (future-proof)
 
 // Other middleware
 app.use(cors({
@@ -269,6 +268,19 @@ app.use("/api/policy-builder", policyBuilderRoutes);
 app.use("/api/resume-formatter", resumeFormatterRoutes);
 app.use("/api/resume", resumeRoutes);
 app.use("/api/salary-benchmark", salaryBenchmarkRoutes);
+
+// Add /api/apps route for app usage tracking
+app.get("/api/apps", async (req, res) => {
+  try {
+    if (isMongoConnected && mongoose.connection.readyState === 1) {
+      const apps = await AppMetric.find();
+      return res.json(apps);
+    }
+  } catch (err) {
+    console.warn("MongoDB GET /api/apps error, using memory:", err.message);
+  }
+  res.json(memoryStore.length ? memoryStore : []);
+});
 
 // ────────────────────────────────────────────────────────────────
 // In-memory fallback for AppMetric (your existing code)

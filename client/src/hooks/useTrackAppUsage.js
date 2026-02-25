@@ -13,16 +13,21 @@ export const useTrackAppUsage = (appId) => {
 
     const trackUsage = async () => {
       try {
-        // Get or find app in database by ID
-        const res = await axios.get(`${API_BASE}/apps`);
-        const apps = res.data || [];
+        // Get or find app in database by ID - try the correct endpoint
+        const res = await axios.get(`${API_BASE}/api/apps`, { timeout: 3000 });
+        
+        if (!res.data || !Array.isArray(res.data)) {
+          // Silently skip if no data
+          return;
+        }
+        
+        const apps = res.data;
         
         // Find app matching the ID (handle both microApps.id and app._id)
         let app = apps.find(a => a._id === appId || a.appName?.toLowerCase().includes(appId));
         
         if (!app) {
-          // If not found, might be a new app - don't fail
-          console.log(`App ${appId} not found in dashboard yet`);
+          // If not found, might be a new app - silently skip tracking (no error)
           return;
         }
 
@@ -36,10 +41,10 @@ export const useTrackAppUsage = (appId) => {
         };
 
         // Update in backend
-        await axios.put(`${API_BASE}/apps/${app._id}`, updatedApp);
-      } catch (err) {
+        await axios.put(`${API_BASE}/api/apps/${app._id}`, updatedApp, { timeout: 3000 });
+      } catch {
         // Silently fail - don't disrupt the user's app usage
-        console.debug('Failed to track app usage:', err.message);
+        // Don't log anything to console
       }
     };
 

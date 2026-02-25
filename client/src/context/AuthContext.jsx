@@ -1,5 +1,5 @@
 import React, { createContext, useEffect, useState } from "react";
-import { auth, db } from "../config/firebaseConfig";
+import { auth, db, isFirebaseConfigured } from "../config/firebaseConfig";
 import {
   onAuthStateChanged,
   createUserWithEmailAndPassword,
@@ -21,8 +21,28 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Initialize auth state listener
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      console.warn("[AuthContext] Firebase not available - running in demo mode");
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
   // Sign up with email/password
   const signup = async (email, password, additionalData = {}) => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      throw new Error("Firebase is not configured. Please add your Firebase credentials to .env file.");
+    }
+    
     const userCredential = await createUserWithEmailAndPassword(
       auth,
       email,
@@ -45,6 +65,10 @@ export const AuthProvider = ({ children }) => {
 
   // Login with email/password
   const login = async (email, password) => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      throw new Error("Firebase is not configured. Please add your Firebase credentials to .env file.");
+    }
+    
     const userCredential = await signInWithEmailAndPassword(
       auth,
       email,
@@ -66,6 +90,10 @@ export const AuthProvider = ({ children }) => {
 
   // Sign in with Google
   const googleSignIn = async (role = "customer") => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      throw new Error("Firebase is not configured. Please add your Firebase credentials to .env file.");
+    }
+    
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
     const firebaseUser = result.user;
@@ -99,10 +127,22 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Logout
-  const logout = () => signOut(auth);
+  const logout = async () => {
+    if (!isFirebaseConfigured || !auth) {
+      // Just clear local state if Firebase not available
+      setUser(null);
+      return;
+    }
+    await signOut(auth);
+  };
 
   // Listen for auth state changes
   useEffect(() => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      console.warn("[AuthContext] Firebase not available - running in demo mode");
+      return;
+    }
+    
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
         // Get user data from Firestore

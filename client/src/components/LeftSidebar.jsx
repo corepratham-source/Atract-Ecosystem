@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import MonetizationCard from "./MonetizationCard";
 import { ADMIN_BASE } from "../config/routes";
-import { STORAGE_KEY } from "./ProtectedRoute";
+import { STORAGE_KEY } from "../constants/user";
 import { signOut } from "firebase/auth";
 import { auth } from "../config/firebaseConfig";
 

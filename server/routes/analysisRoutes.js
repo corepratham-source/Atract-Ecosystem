@@ -160,8 +160,12 @@ router.post("/analyze", async (req, res) => {
   try {
     const { jdText, resumeText, roleType, useAI } = req.body;
 
-    if (!jdText || !resumeText) {
-      return res.status(400).json({ error: "Both jdText and resumeText are required" });
+    if (!jdText || !jdText.trim()) {
+      return res.status(400).json({ error: "Job description (jdText) is required. Please paste a job description first." });
+    }
+
+    if (!resumeText || !resumeText.trim()) {
+      return res.status(400).json({ error: "Resume text (resumeText) is required. Please upload a resume first." });
     }
 
     const jobType = roleType || detectJobType(jdText);
@@ -239,6 +243,16 @@ router.post("/match-job", async (req, res) => {
 
     if (!jdText?.trim()) {
       return res.status(400).json({ error: "Job description is required" });
+    }
+
+    // Check if MongoDB is connected
+    const mongoose = require("mongoose");
+    if (mongoose.connection.readyState !== 1) {
+      console.warn("[Match-job] MongoDB not connected");
+      return res.status(503).json({ 
+        error: "Database not connected - demo mode",
+        suggestion: "Please connect to MongoDB to match resumes"
+      });
     }
 
     const jobType = roleType || detectJobType(jdText);

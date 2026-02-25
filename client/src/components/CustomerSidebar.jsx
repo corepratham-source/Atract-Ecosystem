@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { microApps } from "../data/microApps";
-import { STORAGE_KEY } from "./ProtectedRoute";
+import { STORAGE_KEY } from "../constants/user";
 import { signOut } from "firebase/auth";
 import { auth } from "../config/firebaseConfig";
 import Logo from "../assets/Logo.png";

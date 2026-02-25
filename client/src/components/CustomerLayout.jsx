@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getStoredUser, STORAGE_KEY } from "./ProtectedRoute";
+import { getStoredUser, STORAGE_KEY } from "../constants/user";
 import { microApps } from "../data/microApps";
 import CustomerSidebar from "./CustomerSidebar";
 import { signOut } from "firebase/auth";

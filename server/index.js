@@ -18,8 +18,10 @@ const resumeRoutes = require("./routes/resumeRoutes");
 
 const app = express();
 
+// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb', type: 'application/json' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Better mongoose connection handling
 mongoose
@@ -132,6 +134,24 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/performance-review", performanceReviewRoutes);
 app.use("/api/resume-formatter", resumeFormatterRoutes);
 app.use("/api/resume", resumeRoutes);
+
+// Global error handler for multer and other errors
+app.use((err, req, res, next) => {
+  console.error('[Error] Server error:', err.message);
+  
+  // Handle multer/busboy errors gracefully
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({ error: 'File too large. Maximum size is 10MB.' });
+  }
+  if (err.message && err.message.includes('Unexpected end of form')) {
+    return res.status(400).json({ error: 'File upload failed. Please try again.' });
+  }
+  if (err.message && err.message.includes('Multipart')) {
+    return res.status(400).json({ error: 'Multipart form error. Please try uploading again.' });
+  }
+  
+  res.status(500).json({ error: err.message || 'Internal server error' });
+});
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {

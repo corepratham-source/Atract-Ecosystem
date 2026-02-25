@@ -4,8 +4,7 @@ import { API_BASE } from "../config/api";
 import { createUserWithEmailAndPassword, sendEmailVerification, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { auth } from "../config/firebaseConfig";
 import Logo from "../assets/Logo.png";
-
-const STORAGE_KEY = "atract_user";
+import { getStoredUser, STORAGE_KEY } from "../constants/user";
 
 export default function Signup() {
   const navigate = useNavigate();

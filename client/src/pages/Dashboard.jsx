@@ -6,7 +6,7 @@ import AppTable from "../components/AppTable";
 import LeftSidebar from "../components/LeftSidebar";
 import { microApps } from "../data/microApps";
 import { API_BASE } from "../config/api";
-import { getStoredUser, STORAGE_KEY } from "../components/ProtectedRoute";
+import { getStoredUser, STORAGE_KEY } from "../constants/user";
 import { signOut } from "firebase/auth";
 import { auth } from "../config/firebaseConfig";
 const API_URL = `${API_BASE}/apps`;

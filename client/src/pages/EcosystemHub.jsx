@@ -2,7 +2,7 @@ import { useNavigate } from "react-router-dom";
 import EcosystemHubComponent from "../components/EcosystemHub";
 import HomeSidebar from "../components/HomeSidebar";
 import { ADMIN_BASE } from "../config/routes";
-import { getStoredUser, STORAGE_KEY } from "../components/ProtectedRoute";
+import { getStoredUser, STORAGE_KEY } from "../constants/user";
 import { signOut } from "firebase/auth";
 import { auth } from "../config/firebaseConfig";
 
