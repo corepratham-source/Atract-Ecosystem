@@ -239,11 +239,43 @@ const app = express();
 app.use(express.json({ limit: '10mb' }));                    // JSON payloads up to 10MB
 app.use(express.urlencoded({ extended: true, limit: '10mb' })); // Form data up to 10MB
 
-// Other middleware
-app.use(cors({
-  origin: [process.env.CLIENT_URL || 'http://localhost:5173', 'http://localhost:5174'],
+// CORS configuration - accepts requests from any origin in production
+// In development, it accepts localhost ports
+// Set CLIENT_URL environment variable for production deployments
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    // In production, you might want to be more restrictive
+    if (!origin) {
+      return callback(null, true);
+    }
+    
+    // Development origins
+    const devOrigins = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:5000'
+    ];
+    
+    // Production origin from environment variable
+    const productionOrigin = process.env.CLIENT_URL;
+    
+    // Check if origin is allowed
+    const allowedOrigins = [...devOrigins];
+    if (productionOrigin) {
+      allowedOrigins.push(productionOrigin);
+    }
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || devOrigins.some(o => origin?.startsWith(o)) || origin?.includes('onrender.com')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
-}));
+};
+
+app.use(cors(corsOptions));
 app.use(cookieParser());
 
 // Routes
