@@ -557,45 +557,152 @@ const app = express();
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// CORS - permissive in production, restricted in dev
+const isProduction = process.env.NODE_ENV === "production";
+
 app.use(
   cors({
-    origin: true, // very permissive – fine for most hobby/production apps on Render
+    origin: isProduction ? true : ["http://localhost:5173", "http://localhost:5174"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
 app.use(cookieParser());
 
 // ────────────────────────────────────────────────
-// MongoDB + memory fallback
-// (your existing code – kept almost unchanged)
+// MongoDB Connection with Retry
 // ────────────────────────────────────────────────
-
 let isMongoConnected = false;
 
+const mongoOptions = {
+  serverSelectionTimeoutMS: 15000,
+  socketTimeoutMS: 60000,
+  maxPoolSize: 10,
+  retryWrites: true,
+};
+
+mongoose.set("strictQuery", false);
+
+const connectWithRetry = async (attempt = 1) => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+    console.log("MongoDB connected successfully");
+    isMongoConnected = true;
+  } catch (err) {
+    isMongoConnected = false;
+    console.error(`MongoDB connection attempt #${attempt} failed:`, err.message);
+    if (attempt < 10) {
+      const delay = Math.min(10000 * attempt, 60000);
+      console.log(`Retrying MongoDB in ${delay / 1000}s...`);
+      setTimeout(() => connectWithRetry(attempt + 1), delay);
+    } else {
+      console.error("MongoDB connection failed after retries → using memory mode");
+    }
+  }
+};
+
 if (process.env.MONGO_URI) {
-  mongoose
-    .connect(process.env.MONGO_URI, {
-      serverSelectionTimeoutMS: 15000,
-      socketTimeoutMS: 60000,
-    })
-    .then(() => {
-      console.log("MongoDB connected");
-      isMongoConnected = true;
-    })
-    .catch((err) => {
-      console.error("MongoDB connection failed:", err);
-    });
+  connectWithRetry();
 } else {
-  console.warn("No MONGO_URI – running in memory mode");
+  console.warn("No MONGO_URI provided → running in memory/demo mode");
 }
 
+// ────────────────────────────────────────────────
+// In-memory fallback store for AppMetric
+// ────────────────────────────────────────────────
 const memoryStore = [];
 let memoryIdCounter = 1;
 
-// ... your sanitizeApp + /apps CRUD routes here (GET/POST/PUT/DELETE) ...
+function sanitizeApp(body) {
+  return {
+    appName: String(body.appName || "").trim() || "Untitled",
+    users7d: Number(body.users7d) || 0,
+    users30d: Number(body.users30d) || 0,
+    revenue30d: Number(body.revenue30d) || 0,
+    retention: Math.min(100, Math.max(0, Number(body.retention) || 0)),
+    cost: Number(body.cost) || 0,
+    status: ["Build", "Live", "Pause", "Kill", "Scale"].includes(body.status)
+      ? body.status
+      : "Build",
+    decision: ["Scale", "Watch", "Kill"].includes(body.decision) ? body.decision : "Watch",
+    owner: String(body.owner || "").trim(),
+    lastUpdated: new Date(),
+  };
+}
 
-// Mount all API routes
+// ────────────────────────────────────────────────
+// /apps CRUD Endpoints (Mongo + Memory fallback)
+// ────────────────────────────────────────────────
+app.get("/apps", async (req, res) => {
+  try {
+    if (isMongoConnected) {
+      const apps = await AppMetric.find();
+      return res.json(apps);
+    }
+  } catch (err) {
+    console.warn("MongoDB GET /apps failed:", err.message);
+  }
+  res.json(memoryStore.length ? memoryStore : []);
+});
+
+app.post("/apps", async (req, res) => {
+  const payload = sanitizeApp(req.body);
+  try {
+    if (isMongoConnected) {
+      const appData = new AppMetric(payload);
+      await appData.save();
+      return res.status(201).json(appData);
+    }
+  } catch (err) {
+    console.warn("MongoDB POST /apps failed:", err.message);
+  }
+  const newItem = { _id: `mem_${memoryIdCounter++}`, ...payload };
+  memoryStore.push(newItem);
+  res.status(201).json(newItem);
+});
+
+app.put("/apps/:id", async (req, res) => {
+  const id = req.params.id;
+  const payload = sanitizeApp(req.body);
+  try {
+    if (isMongoConnected && !id.startsWith("mem_")) {
+      const updated = await AppMetric.findByIdAndUpdate(id, payload, { new: true });
+      if (updated) return res.json(updated);
+    }
+  } catch (err) {
+    console.warn("MongoDB PUT /apps failed:", err.message);
+  }
+  const idx = memoryStore.findIndex((a) => String(a._id) === String(id));
+  if (idx >= 0) {
+    memoryStore[idx] = { ...memoryStore[idx], ...payload };
+    return res.json(memoryStore[idx]);
+  }
+  res.status(404).json({ error: "App not found" });
+});
+
+app.delete("/apps/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    if (isMongoConnected && !id.startsWith("mem_")) {
+      const deleted = await AppMetric.findByIdAndDelete(id);
+      if (deleted) return res.json({ message: "App deleted" });
+    }
+  } catch (err) {
+    console.warn("MongoDB DELETE /apps failed:", err.message);
+  }
+  const idx = memoryStore.findIndex((a) => String(a._id) === String(id));
+  if (idx >= 0) {
+    memoryStore.splice(idx, 1);
+    return res.json({ message: "App deleted" });
+  }
+  res.status(404).json({ error: "App not found" });
+});
+
+// ────────────────────────────────────────────────
+// API Routes
+// ────────────────────────────────────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/analysis", analysisRoutes);
 app.use("/api/payment", paymentRoutes);
@@ -609,40 +716,39 @@ app.use("/api/resume-formatter", resumeFormatterRoutes);
 app.use("/api/resume", resumeRoutes);
 app.use("/api/salary-benchmark", salaryBenchmarkRoutes);
 
-// Health check
-app.get("/health", (req, res) => {
+// Health check endpoint
+app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     mongodb: isMongoConnected ? "connected" : "memory mode",
+    timestamp: new Date().toISOString(),
   });
 });
 
 // ────────────────────────────────────────────────
-// Serve frontend – fixed path detection for Render
+// Serve React Frontend (SPA)
 // ────────────────────────────────────────────────
-
 let clientDistPath = null;
 
-// Most reliable paths on Render (when repo root contains client/ and server/)
 const possiblePaths = [
-  path.join(__dirname, "../client/dist"),           // server/ → client/dist
-  path.join(__dirname, "../../client/dist"),        // deeper nesting
-  path.join(process.cwd(), "client/dist"),          // process.cwd() = repo root
-  path.join(process.cwd(), "dist"),                 // if build put dist in root
-  path.join(__dirname, "dist"),                     // unlikely but possible
+  path.join(__dirname, "../client/dist"),
+  path.join(__dirname, "../../client/dist"),
+  path.join(process.cwd(), "client/dist"),
+  path.join(process.cwd(), "dist"),
+  path.join(__dirname, "dist"),
 ];
 
 for (const candidate of possiblePaths) {
-  const indexHtml = path.join(candidate, "index.html");
-  if (fs.existsSync(indexHtml)) {
+  const indexPath = path.join(candidate, "index.html");
+  if (fs.existsSync(indexPath)) {
     clientDistPath = candidate;
-    console.log(`✅ Found React build at: ${clientDistPath}`);
+    console.log(`✅ React build found at: ${clientDistPath}`);
     break;
   }
 }
 
 if (clientDistPath) {
-  // Serve static files with correct MIME types
+  // Serve static files (JS, CSS, images, etc.)
   app.use(
     express.static(clientDistPath, {
       maxAge: "1h",
@@ -658,28 +764,46 @@ if (clientDistPath) {
     })
   );
 
-  // SPA fallback – VERY IMPORTANT
-  app.get("*", (req, res) => {
+  // Serve public folder (manifest.json, sw.js, etc.) if exists
+  const publicPath = path.join(__dirname, "../client/public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+
+  // SPA fallback route - Use regex to match all non-API routes
+  // This avoids path-to-regexp issues with the /* pattern
+  app.get(/^(?!\/api\/).*$/, (req, res) => {
     const indexPath = path.join(clientDistPath, "index.html");
     res.sendFile(indexPath, (err) => {
       if (err) {
-        console.error("Failed to send index.html:", err);
-        res.status(500).send("Frontend error – index.html missing");
+        console.error("Error sending index.html:", err);
+        res.status(500).send("Error loading application");
       }
     });
   });
 } else {
   console.error("React dist folder NOT FOUND in any expected location");
-  app.get("*", (req, res) => {
+  app.use((req, res) => {
     res.status(503).send(
-      "Frontend build missing. " +
+      "Frontend build missing.\n" +
         "Run 'cd client && npm run build' and redeploy."
     );
   });
 }
 
-// Start server
+// ────────────────────────────────────────────────
+// 404 Fallback
+// ────────────────────────────────────────────────
+app.use((req, res) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
+// ────────────────────────────────────────────────
+// Start Server
+// ────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${isProduction ? "production" : "development"}`);
+  console.log(`MongoDB: ${isMongoConnected ? "connected" : "memory mode"}`);
 });
