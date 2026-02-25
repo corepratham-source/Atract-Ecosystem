@@ -2,6 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const path = require("path");
 
 const AppMetric = require("./models/appmetric");
 const analysisRoutes = require("./routes/analysisRoutes");
@@ -151,6 +152,55 @@ app.use((err, req, res, next) => {
   }
   
   res.status(500).json({ error: err.message || 'Internal server error' });
+});
+
+// Serve React build - try multiple possible paths for Render compatibility
+let clientBuildPath;
+try {
+  // Try the direct path first
+  clientBuildPath = path.join(__dirname, '../client/dist');
+  require('fs').accessSync(clientBuildPath); // Verify it exists
+} catch (e) {
+  // Try alternative paths
+  try {
+    clientBuildPath = path.join(__dirname, 'client/dist');
+    require('fs').accessSync(clientBuildPath);
+  } catch (e2) {
+    // Last resort - try the original
+    clientBuildPath = path.join(__dirname, '../client/dist');
+  }
+}
+
+console.log('Serving static files from:', clientBuildPath);
+
+// Serve static files with proper MIME types
+app.use(express.static(clientBuildPath, {
+  maxAge: '1h', // Cache static assets for 1 hour
+  etag: true,
+  lastModified: true
+}));
+
+// Also serve the client/public folder for service worker and manifest
+const publicPath = path.join(__dirname, '../client/public');
+app.use(express.static(publicPath));
+
+// React Router fallback - ONLY for HTML pages, NOT for static assets
+// This regex matches HTML pages but NOT:
+// - /api/* routes
+// - /assets/* (CSS, JS, images)
+// - Files with extensions (.js, .css, .png, .jpg, .svg, .ico, .woff, etc.)
+app.get(/^\/(?!api\/|assets\/)[^.]*$/, (req, res) => {
+  res.sendFile(path.join(clientBuildPath, 'index.html'), (err) => {
+    if (err) {
+      console.error('Error sending index.html:', err);
+      res.status(404).send("ATRact Backend Running - Please build frontend or use /api");
+    }
+  });
+});
+
+// 404 fallback
+app.use((req, res) => {
+  res.status(404).json({ error: "API endpoint not found" });
 });
 
 const PORT = process.env.PORT || 5000;
