@@ -68,6 +68,7 @@ router.post("/register", async (req, res) => {
 
     res.status(201).json({
       message: "Registered successfully",
+      token, // Return token for localStorage
       user: {
         id: user._id,
         name: user.name,
@@ -105,6 +106,7 @@ router.post("/login", async (req, res) => {
 
     res.json({
       message: "Login successful",
+      token, // Return token for localStorage
       user: {
         id: user._id,
         name: user.name,

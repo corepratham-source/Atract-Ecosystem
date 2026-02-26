@@ -1,10 +1,10 @@
 import { useNavigate } from "react-router-dom";
+import { useContext } from "react";
 import EcosystemHubComponent from "../components/EcosystemHub";
 import HomeSidebar from "../components/HomeSidebar";
 import { ADMIN_BASE } from "../config/routes";
 import { getStoredUser, STORAGE_KEY } from "../constants/user";
-import { signOut } from "firebase/auth";
-import { auth } from "../config/firebaseConfig";
+import { AuthContext } from "../context/AuthContext";
 
 const homeApp = {
   valueProposition: "A portfolio of focused micro-products for HR-tech and professionals."
@@ -12,6 +12,7 @@ const homeApp = {
 
 export default function EcosystemHubPage({ isPro = false }) {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
   const user = getStoredUser();
 
   return (
@@ -43,13 +44,13 @@ export default function EcosystemHubPage({ isPro = false }) {
                 type="button"
                 onClick={async () => {
                   try {
-                    // Try Firebase logout
-                    await signOut(auth);
-                  } catch (firebaseError) {
-                    console.log("Firebase logout error:", firebaseError.code);
+                    await logout();
+                  } catch (err) {
+                    console.log("Logout error:", err.message);
                   }
                   // Clear local storage
                   localStorage.removeItem(STORAGE_KEY);
+                  localStorage.removeItem("atract_token");
                   sessionStorage.removeItem(STORAGE_KEY);
                   navigate("/login", { replace: true });
                 }}

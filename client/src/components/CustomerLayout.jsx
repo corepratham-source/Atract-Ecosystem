@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getStoredUser, STORAGE_KEY } from "../constants/user";
 import { microApps } from "../data/microApps";
 import CustomerSidebar from "./CustomerSidebar";
-import { signOut } from "firebase/auth";
-import { auth } from "../config/firebaseConfig";
+import { AuthContext } from "../context/AuthContext";
 import Logo from "../assets/Logo.png";
 
 /**
@@ -21,6 +20,7 @@ export default function CustomerLayout({
 }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
   const user = getStoredUser();
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -31,13 +31,13 @@ export default function CustomerLayout({
 
   const handleLogout = async () => {
     try {
-      // Try Firebase logout
-      await signOut(auth);
-    } catch (firebaseError) {
-      console.log("Firebase logout error:", firebaseError.code);
+      await logout();
+    } catch (err) {
+      console.log("Logout error:", err.message);
     }
     // Clear local storage
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("atract_token");
     sessionStorage.removeItem(STORAGE_KEY);
     navigate("/login", { replace: true });
   };

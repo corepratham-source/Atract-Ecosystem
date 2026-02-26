@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import MonetizationCard from "./MonetizationCard";
 import { ADMIN_BASE } from "../config/routes";
 import { STORAGE_KEY } from "../constants/user";
-import { signOut } from "firebase/auth";
-import { auth } from "../config/firebaseConfig";
+import { AuthContext } from "../context/AuthContext";
 
 const googleAds = [
   {
@@ -59,6 +58,7 @@ const googleAds = [
  */
 export default function LeftSidebar({ app, isPro = false, isOpen, onClose, backTo }) {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
   const backPath = backTo != null ? backTo : ADMIN_BASE + "/";
   const [currentAd, setCurrentAd] = useState(0);
 
@@ -75,13 +75,13 @@ export default function LeftSidebar({ app, isPro = false, isOpen, onClose, backT
 
   const handleLogout = async () => {
     try {
-      // Try Firebase logout
-      await signOut(auth);
-    } catch (firebaseError) {
-      console.log("Firebase logout error (may not be logged in):", firebaseError.code);
+      await logout();
+    } catch (err) {
+      console.log("Logout error (may not be logged in):", err.message);
     }
     // Clear local storage
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("atract_token");
     sessionStorage.removeItem(STORAGE_KEY);
     navigate("/login", { replace: true });
   };

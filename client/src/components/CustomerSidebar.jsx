@@ -1,8 +1,8 @@
 import { Link, useLocation } from "react-router-dom";
 import { microApps } from "../data/microApps";
 import { STORAGE_KEY } from "../constants/user";
-import { signOut } from "firebase/auth";
-import { auth } from "../config/firebaseConfig";
+import { AuthContext } from "../context/AuthContext";
+import { useContext } from "react";
 import Logo from "../assets/Logo.png";
 
 /**
@@ -17,6 +17,7 @@ import Logo from "../assets/Logo.png";
  */
 export default function CustomerSidebar({ isOpen, onClose }) {
   const location = useLocation();
+  const { logout } = useContext(AuthContext);
   const isDashboard = location.pathname === "/customer";
   
   // Get current app ID if on app page
@@ -26,13 +27,13 @@ export default function CustomerSidebar({ isOpen, onClose }) {
 
   const handleLogout = async () => {
     try {
-      // Try Firebase logout
-      await signOut(auth);
-    } catch (firebaseError) {
-      console.log("Firebase logout error (may not be logged in):", firebaseError.code);
+      await logout();
+    } catch (err) {
+      console.log("Logout error (may not be logged in):", err.message);
     }
     // Clear local storage
     localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem("atract_token");
     sessionStorage.removeItem(STORAGE_KEY);
     window.location.href = "/login";
   };

@@ -1,10 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext } from "react";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
 import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
 import { getStoredUser } from "../components/ProtectedRoute";
-import { auth, isFirebaseConfigured } from "../config/firebaseConfig";
-import { onAuthStateChanged } from "firebase/auth";
+import { AuthContext } from "../context/AuthContext";
 
 import { API_BASE } from "../config/api";
 const MAX_FREE_TRIALS = 2;
@@ -19,6 +18,7 @@ const defaultApp = {
 
 
 export default function ResumeScreenerLite({ app = defaultApp }) {
+  const { user } = useContext(AuthContext);
   // Track app usage
   useTrackAppUsage('resume-screener');
 
@@ -44,39 +44,21 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
   useEffect(() => {
     // Check if user is admin - admin has unlimited access
-    // Use Firebase auth state listener for real-time updates
-    if (!auth || !isFirebaseConfigured) {
-      console.warn("[ResumeScreenerLite] Firebase not configured - running in demo mode");
-      return;
+    // Use stored user from JWT auth
+    const storedUser = getStoredUser();
+    const isAdmin = storedUser?.role === "admin";
+    const hasSubscription = storedUser?.subscription === 'paid' ||
+      storedUser?.subscriptionStatus === 'active' ||
+      sessionStorage.getItem("resumeScreenerPaid") === "true";
+    
+    if (isAdmin) {
+      setIsPaid(true);
+    } else {
+      const stored = sessionStorage.getItem("resumeScreenerTrials");
+      if (stored !== null) setTrialCount(parseInt(stored, 10));
+      setIsPaid(hasSubscription);
     }
-
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        // Check stored user for role and subscription
-        const storedUser = getStoredUser();
-        const isAdmin = storedUser?.role === "admin";
-
-        // Check subscription status from stored user data
-        const hasSubscription = storedUser?.subscription === 'paid' ||
-          storedUser?.subscriptionStatus === 'active' ||
-          sessionStorage.getItem("resumeScreenerPaid") === "true";
-
-        if (isAdmin) {
-          setIsPaid(true);
-        } else {
-          const stored = sessionStorage.getItem("resumeScreenerTrials");
-          if (stored !== null) setTrialCount(parseInt(stored, 10));
-          setIsPaid(hasSubscription);
-        }
-      } else {
-        // Not logged in - check session storage
-        const stored = sessionStorage.getItem("resumeScreenerTrials");
-        if (stored !== null) setTrialCount(parseInt(stored, 10));
-        const paid = sessionStorage.getItem("resumeScreenerPaid") === "true";
-        setIsPaid(paid);
-      }
-      fetchUploadedResumes();
-    });
+    fetchUploadedResumes();
 
     // Restore JD from sessionStorage if available
     const savedJD = sessionStorage.getItem("resumeScreenerJD");
@@ -89,8 +71,6 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
         }
       }, 100);
     }
-
-    return () => unsubscribe();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchUploadedResumes = async () => {

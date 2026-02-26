@@ -1,8 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ADMIN_BASE } from "../config/routes";
-import { useState, useEffect, useRef } from "react";
-import { signOut } from "firebase/auth";
-import { auth } from "../config/firebaseConfig";
+import { useState, useEffect, useRef, useContext } from "react";
+import { AuthContext } from "../context/AuthContext";
 
 /**
  * Right-side layout for micro apps: fits viewport, sticky navbar, scrollable content.
@@ -10,6 +9,7 @@ import { auth } from "../config/firebaseConfig";
  */
 export default function MicroAppRightLayout({ app, children }) {
   const navigate = useNavigate();
+  const { logout } = useContext(AuthContext);
   const [showAdminDropdown, setShowAdminDropdown] = useState(false);
   const dropdownRef = useRef(null);
   
@@ -22,15 +22,15 @@ export default function MicroAppRightLayout({ app, children }) {
 
   const handleLogout = async () => {
     try {
-      // Try Firebase logout
-      await signOut(auth);
-    } catch (firebaseError) {
-      console.log("Firebase logout error:", firebaseError.code);
+      await logout();
+    } catch (err) {
+      console.log("Logout error:", err.message);
     }
     // Clear local storage
     localStorage.removeItem("user");
     localStorage.removeItem("token");
     localStorage.removeItem("atract_user");
+    localStorage.removeItem("atract_token");
     sessionStorage.removeItem("user");
     sessionStorage.removeItem("token");
     sessionStorage.removeItem("atract_user");
