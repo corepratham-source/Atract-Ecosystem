@@ -7,15 +7,10 @@ services:
     startCommand: npm start
     envVars:
       - key: MONGO_URI
-        scope: build
       - key: RAZORPAY_KEY_ID
-        scope: build
       - key: RAZORPAY_KEY_SECRET
-        scope: build
       - key: GROQ_API_KEY
-        scope: build
       - key: GROQ_MODEL
-        scope: build
       - key: PORT
         value: "5000"
       - key: NODE_ENV
