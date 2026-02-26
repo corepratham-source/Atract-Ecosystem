@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "description": "ATRact Dashboard - Micro-apps Ecosystem",
   "private": true,
+  "main": "server/server.js",
   "scripts": {
     "build": "cd client && npm install && npm run build",
-    "start": "cd server && node server.js",
-    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\""
+    "start": "node server/server.js",
+    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
+    "install:all": "npm install && cd client && npm install"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
