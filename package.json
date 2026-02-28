@@ -5,35 +5,17 @@
   "private": true,
   "main": "server/server.js",
   "scripts": {
-    "build": "npm install --prefix client && npm run build --prefix client",
+    "build": "cd server && npm install && cd ../client && npm install && npm run build",
     "start": "node server/server.js",
-    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\"",
-    "postinstall": "cd server && npm install"
+    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\""
   },
-  "dependencies": {
-    "@napi-rs/canvas": "^0.1.95",
-    "bcrypt": "^6.0.0",
-    "busboy": "^1.6.0",
-    "cookie-parser": "^1.4.6",
-    "cors": "^2.8.6",
-    "dotenv": "^17.2.4",
-    "express": "^5.2.1",
-    "groq-sdk": "^0.37.0",
-    "jsonwebtoken": "^9.0.3",
-    "mammoth": "^1.11.0",
-    "mongoose": "^9.1.6",
-    "multer": "^2.0.2",
-    "multiparty": "^4.2.3",
-    "pdf-parse": "^1.1.4",
-    "pdfjs-dist": "^4.10.38",
-    "razorpay": "^2.9.6",
-    "tesseract.js": "^7.0.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "concurrently": "^8.0.0",
     "nodemon": "^3.1.7"
   },
   "engines": {
-    "node": "20.x"
+    "node": "20.x",
+    "npm": ">=9.0.0"
   }
 }

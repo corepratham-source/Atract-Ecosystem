@@ -122,7 +122,7 @@ export default function InterviewQuestions({ app = defaultApp }) {
                         isLoading || !role.trim() ? "bg-slate-200 text-slate-400" : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
                       }`}
                     >
-                      {isLoading ? "Generating with Groq..." : "🚀 Generate Questions"}
+                      {isLoading ? "Generating..." : "🚀 Generate Questions"}
                     </button>
                   </div>
                 </div>

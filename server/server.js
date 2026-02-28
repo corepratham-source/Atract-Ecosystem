@@ -840,11 +840,19 @@ const fs = require("fs");
 
 const app = express();
 
+// ─────────────────────────────────────────────
+// Crash guards
+// ─────────────────────────────────────────────
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught exception:", err);
+});
 
 // ─────────────────────────────────────────────
 // Middleware
 // ─────────────────────────────────────────────
-
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
@@ -852,93 +860,140 @@ const isProduction = process.env.NODE_ENV === "production";
 
 app.use(
   cors({
-    origin: isProduction ? true : ["http://localhost:5173"],
+    origin: isProduction ? true : ["http://localhost:5173", "http://localhost:5174"],
     credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
 app.use(cookieParser());
 
-
 // ─────────────────────────────────────────────
 // MongoDB Connection
 // ─────────────────────────────────────────────
-
 let isMongoConnected = false;
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => {
+const connectWithRetry = async (attempt = 1) => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      serverSelectionTimeoutMS: 15000,
+      socketTimeoutMS: 60000,
+      maxPoolSize: 10,
+    });
     console.log("✅ MongoDB connected");
     isMongoConnected = true;
-  })
-  .catch((err) => {
-    console.log("⚠ MongoDB failed, using memory mode");
-    console.log(err.message);
-  });
+  } catch (err) {
+    isMongoConnected = false;
+    console.error(`MongoDB attempt #${attempt} failed:`, err.message);
+    if (attempt < 10) {
+      const delay = Math.min(10000 * attempt, 60000);
+      console.log(`Retrying in ${delay / 1000}s...`);
+      setTimeout(() => connectWithRetry(attempt + 1), delay);
+    } else {
+      console.warn("MongoDB unavailable — running in memory mode");
+    }
+  }
+};
 
+if (process.env.MONGO_URI) {
+  connectWithRetry();
+} else {
+  console.warn("No MONGO_URI — running in memory/demo mode");
+}
 
 // ─────────────────────────────────────────────
-// Routes imports
+// API Routes
 // ─────────────────────────────────────────────
-
-app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/analysis", require("./routes/analysisRoutes"));
-app.use("/api/payment", require("./routes/paymentRoutes"));
-app.use("/api/attendance", require("./routes/attendanceRoutes"));
-app.use("/api/exit-interview", require("./routes/exitInterviewRoutes"));
-app.use("/api/interview", require("./routes/interviewQuestions"));
-app.use("/api/offer-letter", require("./routes/offerLetterRoutes"));
+app.use("/api/auth",               require("./routes/authRoutes"));
+app.use("/api/analysis",           require("./routes/analysisRoutes"));
+app.use("/api/payment",            require("./routes/paymentRoutes"));
+app.use("/api/attendance",         require("./routes/attendanceRoutes"));
+app.use("/api/exit-interview",     require("./routes/exitInterviewRoutes"));
+app.use("/api/interview",          require("./routes/interviewQuestions"));
+app.use("/api/offer-letter",       require("./routes/offerLetterRoutes"));
 app.use("/api/performance-review", require("./routes/performanceReviewRoutes"));
-app.use("/api/policy-builder", require("./routes/policyBuilderRoutes"));
-app.use("/api/resume-formatter", require("./routes/resumeFormatterRoutes"));
-app.use("/api/resume", require("./routes/resumeRoutes"));
-app.use("/api/salary-benchmark", require("./routes/salaryBenchmarkRoutes"));
-
+app.use("/api/policy-builder",     require("./routes/policyBuilderRoutes"));
+app.use("/api/resume-formatter",   require("./routes/resumeFormatterRoutes"));
+app.use("/api/resume",             require("./routes/resumeRoutes"));
+app.use("/api/salary-benchmark",   require("./routes/salaryBenchmarkRoutes"));
 
 // ─────────────────────────────────────────────
 // Health check
 // ─────────────────────────────────────────────
-
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
-    mongodb: isMongoConnected ? "connected" : "memory",
+    mongodb: isMongoConnected ? "connected" : "memory mode",
+    timestamp: new Date().toISOString(),
   });
 });
 
-
 // ─────────────────────────────────────────────
-// Serve React build (IMPORTANT FIX)
+// Serve React build
 // ─────────────────────────────────────────────
+const possibleClientPaths = [
+  path.join(__dirname, "../client/dist"),
+  path.join(__dirname, "../../client/dist"),
+  path.join(process.cwd(), "client/dist"),
+  path.join(process.cwd(), "dist"),
+  path.join(__dirname, "dist"),
+];
 
-const clientPath = path.join(__dirname, "../client/dist");
-
-if (fs.existsSync(clientPath)) {
-
-  app.use(express.static(clientPath));
-
-  app.get("*", (req, res) => {
-
-    res.sendFile(path.join(clientPath, "index.html"));
-
-  });
-
-} else {
-
-  console.log("React build not found");
-
+let clientDistPath = null;
+for (const candidate of possibleClientPaths) {
+  if (fs.existsSync(path.join(candidate, "index.html"))) {
+    clientDistPath = candidate;
+    console.log("✅ React build found at:", clientDistPath);
+    break;
+  }
 }
 
+if (clientDistPath) {
+  // Serve all static assets (JS, CSS, images, fonts, etc.)
+  app.use(express.static(clientDistPath, { maxAge: "1h" }));
+
+  // Also serve client/public (service worker, manifest, etc.)
+  const publicPath = path.join(__dirname, "../client/public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+
+  // ─────────────────────────────────────────
+  // SPA FALLBACK — THE KEY FIX:
+  // Express 5 removed support for `app.get('*', ...)` wildcard.
+  // Must use `/*splat` instead.
+  // ─────────────────────────────────────────
+  app.get("/*splat", (req, res) => {
+    // Don't intercept /api routes (safety net, shouldn't reach here anyway)
+    if (req.path.startsWith("/api/")) {
+      return res.status(404).json({ error: "API endpoint not found" });
+    }
+    res.sendFile(path.join(clientDistPath, "index.html"), (err) => {
+      if (err) {
+        console.error("Error serving index.html:", err);
+        res.status(500).send("Error loading application");
+      }
+    });
+  });
+} else {
+  console.error("❌ React build NOT found. Run: cd client && npm run build");
+  // Still need a catch-all or the server will hang on unknown routes
+  app.use((req, res) => {
+    if (req.path.startsWith("/api/")) {
+      return res.status(404).json({ error: "API endpoint not found" });
+    }
+    res.status(503).send(
+      "Frontend not built. Run 'cd client && npm run build' then redeploy."
+    );
+  });
+}
 
 // ─────────────────────────────────────────────
 // Start server
 // ─────────────────────────────────────────────
-
 const PORT = process.env.PORT || 5000;
-
 app.listen(PORT, () => {
-
   console.log(`🚀 Server running on port ${PORT}`);
-
+  console.log(`Environment: ${isProduction ? "production" : "development"}`);
 });

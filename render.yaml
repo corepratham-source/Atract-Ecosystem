@@ -1,17 +1,12 @@
 services:
   - type: web
-    name: attract-dashboard
-    env: node
+    name: atract-ecosystem
+    runtime: node
+    region: oregon
     plan: free
-    buildCommand: npm run build
-    startCommand: npm start
+    rootDir: .
+    buildCommand: cd server && npm install && cd ../client && npm install && npm run build
+    startCommand: node server/server.js
     envVars:
-      - key: MONGO_URI
-      - key: RAZORPAY_KEY_ID
-      - key: RAZORPAY_KEY_SECRET
-      - key: GROQ_API_KEY
-      - key: GROQ_MODEL
-      - key: PORT
-        value: "5000"
       - key: NODE_ENV
-        value: "production"
+        value: production
