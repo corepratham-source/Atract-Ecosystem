@@ -1,12 +1,11 @@
 {
   "name": "attract-dashboard",
   "version": "1.0.0",
-  "description": "ATRact Dashboard",
   "private": true,
+  "main": "server/server.js",
   "scripts": {
-    "start": "node server/server.js",
-    "build": "cd server && npm install && cd ../client && npm install && npm run build",
-    "dev": "cd server && npm run dev"
+    "build": "npm install --prefix client && npm run build --prefix client && npm install --prefix server",
+    "start": "node server/server.js"
   },
   "engines": {
     "node": "20.x"
