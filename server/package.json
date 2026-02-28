@@ -1,16 +1,11 @@
 {
   "name": "server",
   "version": "1.0.0",
-  "description": "",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "node server.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "commonjs",
   "dependencies": {
     "@napi-rs/canvas": "^0.1.95",
@@ -30,5 +25,8 @@
     "pdfjs-dist": "^4.10.38",
     "razorpay": "^2.9.6",
     "tesseract.js": "^7.0.0"
+  },
+  "engines": {
+    "node": "20.x"
   }
 }

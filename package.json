@@ -1,21 +1,14 @@
 {
   "name": "attract-dashboard",
   "version": "1.0.0",
-  "description": "ATRact Dashboard - Micro-apps Ecosystem",
+  "description": "ATRact Dashboard",
   "private": true,
-  "main": "server/server.js",
   "scripts": {
-    "build": "cd server && npm install && cd ../client && npm install && npm run build",
     "start": "node server/server.js",
-    "dev": "concurrently \"cd client && npm run dev\" \"cd server && npm run dev\""
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "concurrently": "^8.0.0",
-    "nodemon": "^3.1.7"
+    "build": "cd server && npm install && cd ../client && npm install && npm run build",
+    "dev": "cd server && npm run dev"
   },
   "engines": {
-    "node": "20.x",
-    "npm": ">=9.0.0"
+    "node": "20.x"
   }
 }

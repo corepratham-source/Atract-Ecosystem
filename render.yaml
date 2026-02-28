@@ -2,11 +2,12 @@ services:
   - type: web
     name: atract-ecosystem
     runtime: node
-    region: oregon
     plan: free
-    rootDir: .
+    region: oregon
     buildCommand: cd server && npm install && cd ../client && npm install && npm run build
     startCommand: node server/server.js
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "20"
