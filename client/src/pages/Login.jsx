@@ -1,12 +1,11 @@
-import { useState, useMemo, useContext } from "react";
+import { useState, useMemo } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE } from "../config/api";
 import Logo from "../assets/Logo.png";
-import { AuthContext } from "../context/AuthContext";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login: authLogin } = useContext(AuthContext);
+  // Don't use authLogin here - we handle login directly via fetch
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -44,6 +43,7 @@ export default function Login() {
           password,
           role: defaultRole 
         }),
+        credentials: "include" // Include cookies
       });
       
       const data = await res.json().catch(() => ({}));
@@ -62,10 +62,7 @@ export default function Login() {
           localStorage.setItem("atract_user", JSON.stringify(user));
         }
         
-        // Use AuthContext login
-        await authLogin(email.trim(), password);
-        
-        // Navigate based on role
+        // Navigate based on role - don't call authLogin again to avoid double login
         if (user.role === "admin") {
           navigate("/admin", { replace: true });
         } else {
@@ -75,7 +72,7 @@ export default function Login() {
         setError("Invalid response from server");
       }
     } catch (err) {
-      setError(err.message || "Network error");
+      setError(err.message || "Network error - is the server running?");
     }
     
     setLoading(false);

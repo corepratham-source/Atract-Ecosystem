@@ -1,12 +1,11 @@
-import { useState, useContext } from "react";
+import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { API_BASE } from "../config/api";
 import Logo from "../assets/Logo.png";
-import { AuthContext } from "../context/AuthContext";
 
 export default function Signup() {
   const navigate = useNavigate();
-  const { register: authRegister } = useContext(AuthContext);
+  // Don't use authRegister here - we handle registration directly via fetch
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -32,6 +31,7 @@ export default function Signup() {
           password,
           role,
         }),
+        credentials: "include" // Include cookies
       });
       
       const data = await res.json().catch(() => ({}));
@@ -48,24 +48,14 @@ export default function Signup() {
         localStorage.setItem("atract_user", JSON.stringify(data.user));
       }
 
-      // Use AuthContext register
-      await authRegister(name.trim(), email.trim(), password, role);
-
-      // Show verification message (or redirect based on backend response)
-      // Since backend doesn't require email verification, auto-login
-      if (data.user) {
-        // Navigate based on role
-        if (role === "admin") {
-          navigate("/admin", { replace: true });
-        } else {
-          navigate("/customer", { replace: true });
-        }
+      // Navigate based on role - don't call authRegister again to avoid double registration
+      if (role === "admin") {
+        navigate("/admin", { replace: true });
       } else {
-        // If no auto-login, show verification message
-        setShowVerificationMessage(true);
+        navigate("/customer", { replace: true });
       }
     } catch (err) {
-      setError(err.message || "Network error");
+      setError(err.message || "Network error - is the server running?");
     }
     
     setLoading(false);

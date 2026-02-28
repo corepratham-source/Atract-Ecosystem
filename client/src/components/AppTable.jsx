@@ -2,7 +2,7 @@ import { useState } from "react";
 import axios from "axios";
 
 import { API_BASE } from "../config/api";
-const API_URL = `${API_BASE}/apps`;
+const API_URL = `${API_BASE}/api/apps`;
 
 export default function AppTable({ apps, setApps }) {
   const [editingId, setEditingId] = useState(null);

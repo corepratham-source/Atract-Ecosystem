@@ -1,3 +1,955 @@
+// import { useState, useEffect, useContext } from "react";
+// import Field from "../components/Field";
+// import LeftSidebar from "../components/LeftSidebar";
+// import { useTrackAppUsage } from "../hooks/useTrackAppUsage";
+// import { getStoredUser } from "../components/ProtectedRoute";
+// import { AuthContext } from "../context/AuthContext";
+
+// import { API_BASE } from "../config/api";
+// const MAX_FREE_TRIALS = 2;
+// const MAX_FREE_RESUMES = 1;
+// const MAX_PAID_RESUMES = 5;
+
+// const defaultApp = {
+//   name: "Resume Screener Lite",
+//   valueProposition: "AI-Powered Resume Analysis with TF-IDF Matching",
+//   pricing: "₹499/month or ₹99 per batch",
+// };
+
+
+// export default function ResumeScreenerLite({ app = defaultApp }) {
+//   const { user } = useContext(AuthContext);
+//   // Track app usage
+//   useTrackAppUsage('resume-screener');
+
+//   const [jd, setJd] = useState("");
+//   const [jdFile, setJdFile] = useState(null);
+//   const [jdFileName, setJdFileName] = useState("");
+//   const [isProcessing, setIsProcessing] = useState(false);
+//   const [hasAnalyzed, setHasAnalyzed] = useState(false);
+//   const [result, setResult] = useState(null);
+//   const [error, setError] = useState("");
+//   const [fileName, setFileName] = useState("");
+//   const [showPayment, setShowPayment] = useState(false);
+//   const [isPaid, setIsPaid] = useState(false);
+//   const [trialCount, setTrialCount] = useState(0);
+//   const [paymentLoading, setPaymentLoading] = useState(false);
+
+//   // Multiple resumes and results
+//   const [uploadedResumes, setUploadedResumes] = useState([]);
+//   const [matchResults, setMatchResults] = useState([]);
+//   const [currentResumeId, setCurrentResumeId] = useState(null);
+//   const [uploadedFiles, setUploadedFiles] = useState([]);
+//   const [uploadedFile, setUploadedFile] = useState(null);
+
+//   useEffect(() => {
+//     // Check if user is admin - admin has unlimited access
+//     // Use stored user from JWT auth
+//     const storedUser = getStoredUser();
+//     const isAdmin = storedUser?.role === "admin";
+//     const hasSubscription = storedUser?.subscription === 'paid' ||
+//       storedUser?.subscriptionStatus === 'active' ||
+//       sessionStorage.getItem("resumeScreenerPaid") === "true";
+    
+//     if (isAdmin) {
+//       setIsPaid(true);
+//     } else {
+//       const stored = sessionStorage.getItem("resumeScreenerTrials");
+//       if (stored !== null) setTrialCount(parseInt(stored, 10));
+//       setIsPaid(hasSubscription);
+//     }
+//     fetchUploadedResumes();
+
+//     // Restore JD from sessionStorage if available
+//     const savedJD = sessionStorage.getItem("resumeScreenerJD");
+//     if (savedJD) {
+//       setJd(savedJD);
+//       // Also restore match results if JD exists (delayed to ensure functions are defined)
+//       setTimeout(() => {
+//         if (savedJD.trim()) {
+//           matchAllResumes(savedJD);
+//         }
+//       }, 100);
+//     }
+//   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+//   const fetchUploadedResumes = async () => {
+//     try {
+//       const res = await fetch(`${API_BASE}/api/resume`);
+//       const data = await res.json();
+//       if (data && Array.isArray(data)) {
+//         setUploadedResumes(data);
+//       } else if (data && Array.isArray(data.resumes)) {
+//         setUploadedResumes(data.resumes);
+//       }
+//     } catch (err) {
+//       console.error("Failed to fetch resumes:", err);
+//     }
+//   };
+
+//   const updateTrialCount = (count) => {
+//     setTrialCount(count);
+//     sessionStorage.setItem("resumeScreenerTrials", count.toString());
+//   };
+
+//   const handleFileUpload = async (e) => {
+//     const files = e.target.files;
+//     if (!files || files.length === 0) return;
+
+//     // Handle multiple files for paid users
+//     if (isPaid && files.length > 1) {
+//       const newFiles = Array.from(files).map(file => ({
+//         file,
+//         name: file.name,
+//         status: 'pending'
+//       }));
+//       setUploadedFiles(prev => [...prev, ...newFiles]);
+//     } else {
+//       // Single file upload
+//       const file = files[0];
+//       setFileName(file.name);
+//       setUploadedFile(file);
+//     }
+//     setError("");
+//     setIsProcessing(false);
+//   };
+
+//   // Handle JD file upload - send to server for text extraction
+//   const handleJDFileUpload = async (e) => {
+//     const file = e.target.files?.[0];
+//     if (!file) return;
+
+//     setIsProcessing(true);
+//     setError("");
+
+//     // Validate file size first (client-side check)
+//     const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+//     if (file.size > MAX_FILE_SIZE) {
+//       setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB. Please use a smaller file or paste the JD text directly.`);
+//       setIsProcessing(false);
+//       return;
+//     }
+
+//     // Validate file type
+//     const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'];
+//     const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt'];
+//     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
+    
+//     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension) && !file.type.startsWith('image/')) {
+//       setError("Invalid file type. Please upload a PDF, DOCX, DOC, TXT file or paste the JD text directly.");
+//       setIsProcessing(false);
+//       return;
+//     }
+
+//     try {
+//       // Send file to server for text extraction using the existing /upload-jd endpoint
+//       const formData = new FormData();
+//       formData.append("jd", file); // Server expects 'jd' field name
+
+//       // Add timeout to prevent hanging requests
+//       const controller = new AbortController();
+//       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+//       const response = await fetch(`${API_BASE}/api/resume/upload-jd`, {
+//         method: "POST",
+//         body: formData,
+//         signal: controller.signal,
+//       });
+      
+//       clearTimeout(timeoutId);
+
+//       // Check if response is OK - handle non-OK responses
+//       if (!response.ok) {
+//         const errorText = await response.text();
+//         console.error("Server error:", response.status, errorText);
+
+//         // Try to parse as JSON for more details
+//         try {
+//           const errorData = JSON.parse(errorText);
+//           if (errorData.error) {
+//             if (errorData.isScanned || errorData.error.toLowerCase().includes('scanned')) {
+//               setError("This file appears to be a scanned document. Please convert it to a text-based PDF, DOCX, or use the text input below.");
+//             } else if (errorData.error.toLowerCase().includes('stream ended') || errorData.error.toLowerCase().includes('corrupted')) {
+//               setError("This PDF file appears to be corrupted or scanned. Please try a different file or paste the JD text directly.");
+//             } else if (errorData.suggestion) {
+//               setError(errorData.error + " " + errorData.suggestion);
+//             } else {
+//               setError("Failed to read JD file: " + errorData.error);
+//             }
+//           } else {
+//             setError("Server error: " + response.status + ". Please try a different file or paste the JD text.");
+//           }
+//         } catch {
+//           // Not JSON response
+//           setError("Server error (code " + response.status + "). Please try a different file or paste the JD text.");
+//         }
+//         setIsProcessing(false);
+//         return;
+//       }
+
+//       const data = await response.json();
+
+//       // Handle different error cases with user-friendly messages
+//       if (data.error) {
+//         console.error("Failed to extract text from JD file:", data.error);
+
+//         // Provide specific error messages based on the error type
+//         if (data.isScanned || data.error.toLowerCase().includes('scanned')) {
+//           setError("This file appears to be a scanned document. Please convert it to a text-based PDF, DOCX, or use the text input below.");
+//         } else if (data.error.toLowerCase().includes('stream ended') || data.error.toLowerCase().includes('corrupted')) {
+//           setError("This PDF file appears to be corrupted or scanned. Please try a different file or paste the JD text directly.");
+//         } else if (data.suggestion) {
+//           setError(data.error + " " + data.suggestion);
+//         } else {
+//           setError("Failed to read JD file: " + data.error);
+//         }
+//         setIsProcessing(false);
+//         return;
+//       }
+
+//       // Check for empty extraction
+//       const extractedText = data.text || "";
+//       if (!extractedText || !extractedText.trim()) {
+//         setError("Could not extract any text from this file. Please try pasting the JD instead or use a different file format.");
+//         setIsProcessing(false);
+//         return;
+//       }
+
+//       setJd(extractedText);
+//       setJdFile(file);
+//       setJdFileName(file.name);
+//       sessionStorage.setItem("resumeScreenerJD", extractedText);
+
+//       // If there are resumes, re-match with new JD
+//       if (uploadedResumes.length > 0 || uploadedFile || uploadedFiles.length > 0) {
+//         setTimeout(() => matchAllResumes(extractedText), 100);
+//       }
+//     } catch (err) {
+//       console.error("JD upload error:", err);
+//       setError("Failed to process JD file. Please try a different file or paste the JD text directly.");
+//     } finally {
+//       setIsProcessing(false);
+//     }
+//   };
+
+//   // Clear JD file and use text area instead
+//   const clearJDFile = () => {
+//     setJdFile(null);
+//     setJdFileName("");
+//   };
+
+//   // Analyze and automatically store resume in database
+//   const analyzeAndStoreResume = async () => {
+//     const hasFiles = uploadedFile || uploadedFiles.length > 0;
+//     if (!jd || !hasFiles) {
+//       setError("Please enter JD and upload a resume");
+//       return;
+//     }
+
+//     // Check free trials - only for non-paid users
+//     if (!isPaid && trialCount >= MAX_FREE_TRIALS) {
+//       setShowPayment(true);
+//       return;
+//     }
+
+//     setIsProcessing(true);
+//     setError("");
+
+//     try {
+//       // Handle multiple files for paid users
+//       if (uploadedFiles.length > 0) {
+//         // Process multiple resumes
+//         for (const fileObj of uploadedFiles) {
+//           await processSingleResume(fileObj.file, fileObj.name);
+//         }
+//         // Clear uploaded files after processing
+//         setUploadedFiles([]);
+//         setFileName("");
+//         setUploadedFile(null);
+
+//         // Match all resumes against JD in background
+//         matchAllResumes(jd);
+//         fetchUploadedResumes();
+//       } else if (uploadedFile) {
+//         // Process single resume (existing logic)
+//         await processSingleResume(uploadedFile, fileName);
+//       }
+//     } catch (e) {
+//       setError("Analysis failed: " + e.message);
+//       setHasAnalyzed(false);
+//     } finally {
+//       setIsProcessing(false);
+//     }
+//   };
+
+//   // Helper function to process a single resume
+//   const processSingleResume = async (file, name) => {
+//     const formData = new FormData();
+//     formData.append("resume", file);
+//     formData.append("name", name.replace(/\.[^.]+$/, ""));
+
+//     console.log(`[Upload] Starting upload for: ${name}`);
+
+//     const uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
+//       method: "POST",
+//       body: formData,
+//     });
+
+//     if (!uploadResponse.ok) {
+//       const errorText = await uploadResponse.text();
+//       console.error("[Upload] Failed response:", errorText);
+//       try {
+//         const errorData = JSON.parse(errorText);
+//         setError(errorData.error || `Upload failed: ${uploadResponse.status}`);
+//       } catch {
+//         setError(`Upload failed: ${uploadResponse.status}`);
+//       }
+//       return null;
+//     }
+
+//     const uploadData = await uploadResponse.json();
+//     console.log("[Upload] Response received:", {
+//       success: uploadData.success,
+//       hasText: !!uploadData.text,
+//       textLength: uploadData.text?.length,
+//       textLengthField: uploadData.textLength,
+//       extractionMethod: uploadData.extractionMethod,
+//       id: uploadData.id
+//     });
+
+//     if (uploadData.error) {
+//       setError(uploadData.error + (uploadData.suggestion ? ` ${uploadData.suggestion}` : ""));
+//       return null;
+//     }
+
+//     // FIXED: Server may not return text field directly - fetch it using the ID
+//     let extractedText = uploadData.text || uploadData.resumeText;
+    
+//     if (!extractedText || !extractedText.trim()) {
+//       console.log("[Upload] Text not in response, fetching from database using ID:", uploadData.id);
+      
+//       // Fetch the resume text from the database using the ID
+//       try {
+//         const resumeResponse = await fetch(`${API_BASE}/api/resume/${uploadData.id}`);
+//         if (resumeResponse.ok) {
+//           const resumeData = await resumeResponse.json();
+//           extractedText = resumeData.text || resumeData.resumeText;
+//           console.log("[Upload] Fetched text from database:", extractedText?.length, "chars");
+//         }
+//       } catch (err) {
+//         console.error("[Upload] Failed to fetch resume text:", err);
+//       }
+//     }
+    
+//     if (!extractedText || !extractedText.trim()) {
+//       setError("Failed to extract text from resume. The file may be empty, scanned, or corrupted.");
+//       console.error("[Upload] No text extracted - uploadData:", uploadData);
+//       return null;
+//     }
+
+//     console.log(`[Upload] ✅ Success: ${extractedText.length} chars extracted via ${uploadData.extractionMethod}`);
+
+//     // Validate JD before analyzing
+//     if (!jd || !jd.trim()) {
+//       setError("Please enter a job description before analyzing the resume.");
+//       return;
+//     }
+
+//     // Debug logging
+//     console.log("[Analyze] Sending request with:", {
+//       jdLength: jd?.length || 0,
+//       resumeTextLength: extractedText?.length || 0,
+//       jdPreview: jd?.substring(0, 100),
+//       resumePreview: extractedText?.substring(0, 100)
+//     });
+
+//     // Analyze the resume - FIXED: Use extractedText instead of uploadData.text
+//     const analyzeResponse = await fetch(`${API_BASE}/api/analysis/analyze`, {
+//       method: "POST",
+//       headers: { "Content-Type": "application/json" },
+//       body: JSON.stringify({ jdText: jd, resumeText: extractedText }),
+//     });
+
+//     if (!analyzeResponse.ok) {
+//       const errorText = await analyzeResponse.text();
+//       console.error("[Analyze] Failed response:", errorText);
+//       try {
+//         const errorData = JSON.parse(errorText);
+//         setError(errorData.error || `Server error: ${analyzeResponse.status}`);
+//       } catch {
+//         setError(`Server error: ${analyzeResponse.status}`);
+//       }
+//       return;
+//     }
+
+//     const analyzeData = await analyzeResponse.json();
+
+//     if (analyzeData.error) {
+//       setError(analyzeData.error);
+//     } else {
+//       setResult(analyzeData);
+//       setCurrentResumeId(uploadData.id);
+//       setHasAnalyzed(true);
+
+//       // Update trial count in background (for non-paid users)
+//       if (!isPaid) updateTrialCount(trialCount + 1);
+//     }
+//   };
+
+//   // Match all resumes against the current JD
+//   const matchAllResumes = async (jobDescription) => {
+//     if (!jobDescription) return;
+
+//     try {
+//       const response = await fetch(`${API_BASE}/api/analysis/match-job`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ jdText: jobDescription }),
+//       });
+
+//       const data = await response.json();
+
+//       if (data.error) {
+//         console.error("Matching error:", data.error);
+//       } else {
+//         setMatchResults(data.rankedCandidates || []);
+//       }
+//     } catch (e) {
+//       console.error("Matching failed:", e);
+//     }
+//   };
+
+//   // Load previous analysis result
+//   const loadResult = (historyItem) => {
+//     const found = matchResults.find(r => r.id === historyItem.id);
+//     if (found) {
+//       setResult({
+//         overallScore: found.matchPercentage,
+//         similarityScore: found.tfidfSimilarity,
+//         verdict: found.matchPercentage >= 75 ? "Excellent Match" :
+//           found.matchPercentage >= 50 ? "Good Match" : "Poor Match",
+//         verdictColor: found.matchPercentage >= 50 ? "green" : "red",
+//         matchedKeywords: found.matchedKeywords || [],
+//         missingKeywords: found.missingKeywords || [],
+//         isTechnical: found.isTechnical
+//       });
+//       setCurrentResumeId(historyItem.id);
+//     }
+//   };
+
+//   // Delete a resume
+//   const deleteResume = async (id) => {
+//     try {
+//       await fetch(`${API_BASE}/api/resume/${id}`, { method: "DELETE" });
+//       await fetchUploadedResumes();
+//       await matchAllResumes(jd);
+//     } catch (err) {
+//       console.error("Delete failed:", err);
+//     }
+//   };
+
+//   const loadRazorpayScript = () => {
+//     return new Promise((resolve) => {
+//       if (window.Razorpay) {
+//         resolve();
+//         return;
+//       }
+//       const script = document.createElement("script");
+//       script.src = "https://checkout.razorpay.com/v1/checkout.js";
+//       script.onload = () => resolve();
+//       script.onerror = () => resolve(false);
+//       document.body.appendChild(script);
+//     });
+//   };
+
+//   const handlePayment = async (plan) => {
+//     setPaymentLoading(true);
+//     setError("");
+
+//     try {
+//       const res = await fetch(`${API_BASE}/api/payment/create-order`, {
+//         method: "POST",
+//         headers: { "Content-Type": "application/json" },
+//         body: JSON.stringify({ plan }),
+//       });
+
+//       const data = await res.json();
+
+//       if (!res.ok || data.error) {
+//         if (data.error?.includes("not configured")) {
+//           alert("Payment gateway not configured. Adding demo paid access.");
+//           setIsPaid(true);
+//           sessionStorage.setItem("resumeScreenerPaid", "true");
+//           setShowPayment(false);
+//           updateTrialCount(0);
+//         } else {
+//           setError(data.error || "Failed to create order");
+//         }
+//         setPaymentLoading(false);
+//         return;
+//       }
+
+//       await loadRazorpayScript();
+
+//       if (!window.Razorpay) {
+//         setError("Payment script failed to load");
+//         setPaymentLoading(false);
+//         return;
+//       }
+
+//       const options = {
+//         key: data.keyId,
+//         amount: data.amount,
+//         currency: data.currency,
+//         name: "ATRact Resume Screener",
+//         description: plan === "basic" ? "Basic - Unlimited Analyses" : "Premium - Full Access",
+//         order_id: data.orderId,
+//         handler: async (response) => {
+//           try {
+//             const verifyRes = await fetch(`${API_BASE}/api/payment/verify`, {
+//               method: "POST",
+//               headers: { "Content-Type": "application/json" },
+//               body: JSON.stringify({
+//                 razorpay_order_id: response.razorpay_order_id,
+//                 razorpay_payment_id: response.razorpay_payment_id,
+//                 razorpay_signature: response.razorpay_signature,
+//               }),
+//             });
+//             const verifyData = await verifyRes.json();
+//             if (verifyData.success) {
+//               setIsPaid(true);
+//               sessionStorage.setItem("resumeScreenerPaid", "true");
+//               setShowPayment(false);
+//               updateTrialCount(0);
+//               alert("Payment successful! You now have unlimited access.");
+//             } else {
+//               setError("Payment verification failed");
+//             }
+//           } catch (err) {
+//             console.error(err);
+//             setError("Could not verify payment");
+//           } finally {
+//             setPaymentLoading(false);
+//           }
+//         },
+//         prefill: {
+//           name: "Customer",
+//           email: "customer@example.com",
+//           contact: "9999999999",
+//         },
+//         theme: { color: "#4F46E5" },
+//         modal: {
+//           ondismiss: () => setPaymentLoading(false),
+//         },
+//       };
+
+//       const rzp = new window.Razorpay(options);
+//       rzp.on("payment.failed", () => {
+//         setError("Payment failed. Please try again.");
+//         setPaymentLoading(false);
+//       });
+//       rzp.open();
+//     } catch (err) {
+//       setError(err.message || "Payment failed");
+//     } finally {
+//       setPaymentLoading(false);
+//     }
+//   };
+
+//   return (
+//     <div className="flex min-h-screen bg-gray-100">
+//       <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
+//       <div className="flex-1 ml-80 min-h-screen flex flex-col">
+//         {/* Sticky Header - App Name at top of right side */}
+//         <div className="flex-shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
+//           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
+//             <div className="min-w-0">
+//               <h1 className="text-base sm:text-lg font-bold text-gray-900 truncate">{app.name}</h1>
+//               {app.valueProposition && (
+//                 <p className="text-xs text-gray-500 truncate hidden sm:block">{app.valueProposition}</p>
+//               )}
+//             </div>
+//             <div className="flex items-center gap-2">
+//               <span className="text-2xl" role="img" aria-label={app.name}>
+//                 {app.icon || '📋'}
+//               </span>
+//               {isPaid && (
+//                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+//                   Pro
+//                 </span>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+//         {/* Scrollable content */}
+//         <div className="flex-1 overflow-hidden flex">
+//           <div className="w-1/2 h-screen overflow-hidden flex flex-col">
+//             <div className="p-6 flex-1 flex flex-col">
+//               <div className="bg-white border rounded-xl shadow-sm flex-1 flex flex-col">
+//                 <div className="p-6 border-b border-gray-100">
+//                   <h2 className="text-xl font-bold text-gray-900">📋 Job Description</h2>
+//                 </div>
+
+//                 <div className="flex-1 overflow-y-auto p-4 space-y-4">
+//                   {error && (
+//                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+//                       {error}
+//                     </div>
+//                   )}
+
+//                   <Field label="Job Description" helper="Upload JD file or paste job description">
+//                     {/* JD File Upload Option */}
+//                     <input
+//                       type="file"
+//                       accept=".pdf,.docx,.doc,.txt,image/*"
+//                       onChange={handleJDFileUpload}
+//                       className="hidden"
+//                       id="jd-file-upload"
+//                     />
+//                     <label
+//                       htmlFor="jd-file-upload"
+//                       className={`flex items-center justify-center w-full h-11 rounded-lg cursor-pointer mb-3 font-medium transition-colors ${jdFile
+//                           ? 'bg-green-100 text-green-700 border-2 border-green-300'
+//                           : 'bg-blue-50 text-blue-600 border-2 border-blue-200 hover:bg-blue-100'
+//                         }`}
+//                     >
+//                       {jdFile ? (
+//                         <div className="flex items-center gap-2">
+//                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+//                           </svg>
+//                           <span>{jdFileName}</span>
+//                           <button
+//                             type="button"
+//                             onClick={(e) => { e.preventDefault(); e.stopPropagation(); clearJDFile(); }}
+//                             className="ml-2 text-green-500 hover:text-red-500"
+//                           >
+//                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+//                             </svg>
+//                           </button>
+//                         </div>
+//                       ) : (
+//                         <div className="flex items-center gap-2">
+//                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+//                           </svg>
+//                           <span>Upload JD</span>
+//                         </div>
+//                       )}
+//                     </label>
+
+//                     {/* OR divider */}
+//                     <div className="flex items-center gap-3 mb-3">
+//                       <div className="flex-1 h-px bg-gray-200"></div>
+//                       <span className="text-xs text-gray-400 font-medium">OR</span>
+//                       <div className="flex-1 h-px bg-gray-200"></div>
+//                     </div>
+
+//                     {/* Paste JD Text Area */}
+//                     <textarea
+//                       value={jd}
+//                       onChange={(e) => {
+//                         setJd(e.target.value);
+//                         setJdFile(null);
+//                         setJdFileName("");
+//                         sessionStorage.setItem("resumeScreenerJD", e.target.value);
+//                       }}
+//                       className="w-full h-32 rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
+//                       placeholder="Or paste job description here..."
+//                       disabled={!!jdFile}
+//                     />
+//                   </Field>
+
+//                   <Field label={`Resume${isPaid ? ' (Max 5)' : ' (Max 1)'}`} helper={`Upload PDF or DOCX${isPaid ? ' - You can upload up to 5 resumes at a time' : ''}`}>
+//                     <input
+//                       type="file"
+//                       accept=".pdf,.docx,.txt"
+//                       multiple={isPaid}
+//                       onChange={handleFileUpload}
+//                       className="hidden"
+//                       id="resume-upload"
+//                     />
+//                     <label
+//                       htmlFor="resume-upload"
+//                       className="flex items-center justify-center w-full h-24 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400 bg-gray-50 transition-colors"
+//                     >
+//                       {isProcessing ? (
+//                         <div className="text-center">
+//                           <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2" />
+//                           <p className="text-gray-600 text-sm">Processing...</p>
+//                         </div>
+//                       ) : uploadedFile || uploadedFiles.length > 0 ? (
+//                         <div className="text-center">
+//                           <svg className="w-10 h-10 text-green-600 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+//                           </svg>
+//                           {uploadedFiles.length > 1 ? (
+//                             <div>
+//                               <span className="text-xl text-black block">{uploadedFiles.length} files selected</span>
+//                               <span className="text-sm text-gray-500">{uploadedFiles.map(f => f.name).join(', ')}</span>
+//                             </div>
+//                           ) : (
+//                             <span className="text-xl text-black truncate block max-w-[200px] mx-auto">{fileName}</span>
+//                           )}
+//                         </div>
+//                       ) : (
+//                         <div className="text-center">
+//                           <svg className="w-10 h-10 text-gray-400 mx-auto mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+//                           </svg>
+//                           <span className="text-gray-500 text-sm">Click to upload resume</span>
+//                         </div>
+//                       )}
+//                     </label>
+//                   </Field>
+//                 </div>
+
+//                 <div className="p-6 border-t border-gray-100">
+//                   <button
+//                     onClick={analyzeAndStoreResume}
+//                     disabled={(!jd || (!uploadedFile && uploadedFiles.length === 0) || isProcessing)}
+//                     className={`w-full py-3 rounded-lg font-semibold transition-all ${jd && (uploadedFile || uploadedFiles.length > 0) && !isProcessing
+//                         ? "bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md"
+//                         : "bg-gray-200 text-gray-500 cursor-not-allowed"
+//                       }`}
+//                   >
+//                     {isProcessing ? (
+//                       <span className="flex items-center justify-center">
+//                         <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+//                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+//                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+//                         </svg>
+//                         Analyzing & Storing...
+//                       </span>
+//                     ) : (
+//                       uploadedFiles.length > 1
+//                         ? `🎯 Analyze & Store ${uploadedFiles.length} Resumes`
+//                         : "🎯 Analyze & Store Resume"
+//                     )}
+//                   </button>
+//                 </div>
+//               </div>
+//             </div>
+//           </div>
+
+//           <div className="w-1/2 h-screen overflow-y-auto bg-gray-50">
+//             <div className="p-6">
+//               {!hasAnalyzed ? (
+//                 <div className="bg-white border rounded-xl p-12 shadow-sm text-center">
+//                   <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+//                     <svg className="w-10 h-10 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+//                     </svg>
+//                   </div>
+//                   <h3 className="text-xl font-bold text-gray-900 mb-2">Ready to Analyze</h3>
+//                   <p className="text-gray-600 mb-4">
+//                     Upload a resume and paste the job description to get detailed analysis
+//                   </p>
+//                   <div className="bg-blue-50 rounded-lg p-4 text-left">
+//                     <h4 className="font-semibold text-blue-900 mb-2">What you'll get:</h4>
+//                     <ul className="space-y-2 text-sm text-blue-800">
+//                       <li className="flex items-start"><span className="mr-2">✓</span><span>TF-IDF based accurate matching</span></li>
+//                       <li className="flex items-start"><span className="mr-2">✓</span><span>Cosine similarity percentage (0-100%)</span></li>
+//                       <li className="flex items-start"><span className="mr-2">✓</span><span>Technical/Non-technical role detection</span></li>
+//                       <li className="flex items-start"><span className="mr-2">✓</span><span>Key suggestions to improve your resume</span></li>
+//                     </ul>
+//                   </div>
+//                 </div>
+//               ) : (
+//                 <div className="space-y-4 pb-6">
+//                   {/* Overall Score - First */}
+//                   <div className="bg-white border rounded-xl p-6 shadow-sm">
+//                     <div className="flex items-center justify-between mb-4">
+//                       <h3 className="font-semibold text-gray-900">Overall Match Score</h3>
+//                       <span
+//                         className={`px-4 py-2 rounded-full text-sm font-bold ${result.verdictColor === "green" ? "bg-green-100 text-green-700" :
+//                             "bg-red-100 text-red-700"
+//                           }`}
+//                       >
+//                         {result.verdict}
+//                       </span>
+//                     </div>
+
+//                     <div className="text-7xl font-bold text-gray-900 mb-2">
+//                       {result.overallScore}
+//                       <span className="text-3xl text-gray-400">%</span>
+//                     </div>
+
+//                     <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+//                       <div
+//                         className={`h-full rounded-full transition-all duration-1000 ${result.verdictColor === "green" ? "bg-green-500" : "bg-red-500"
+//                           }`}
+//                         style={{ width: `${result.overallScore}%` }}
+//                       />
+//                     </div>
+
+//                     <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+//                       <p className="text-sm text-gray-700">
+//                         <strong>TF-IDF Similarity:</strong> {result.similarityScore}%
+//                       </p>
+//                       <p className="text-sm text-gray-500 mt-1">
+//                         Role Type: <span className="font-medium">{result.isTechnical ? "Technical" : "Non-Technical"}</span>
+//                       </p>
+//                     </div>
+//                   </div>
+
+//                   {/* Suggestions - Second */}
+//                   <div className="bg-white border rounded-xl p-6 shadow-sm">
+//                     <h3 className="font-semibold text-gray-900 mb-4">💡 Suggestions to Improve</h3>
+
+//                     {/* Missing Keywords */}
+//                     {result.missingKeywords && result.missingKeywords.length > 0 && (
+//                       <div className="mb-4">
+//                         <h4 className="text-sm font-medium text-rose-700 mb-2">Add these missing skills:</h4>
+//                         <div className="flex flex-wrap gap-2">
+//                           {result.missingKeywords.map((keyword, idx) => (
+//                             <span key={idx} className="px-3 py-1 bg-rose-100 text-rose-700 rounded-full text-sm">
+//                               {keyword}
+//                             </span>
+//                           ))}
+//                         </div>
+//                       </div>
+//                     )}
+
+//                     {/* Matched Keywords */}
+//                     {result.matchedKeywords && result.matchedKeywords.length > 0 && (
+//                       <div>
+//                         <h4 className="text-sm font-medium text-emerald-700 mb-2">Already matching:</h4>
+//                         <div className="flex flex-wrap gap-2">
+//                           {result.matchedKeywords.slice(0, 10).map((keyword, idx) => (
+//                             <span key={idx} className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-sm">
+//                               {keyword}
+//                             </span>
+//                           ))}
+//                         </div>
+//                       </div>
+//                     )}
+
+//                     {(!result.missingKeywords || result.missingKeywords.length === 0) &&
+//                       (!result.matchedKeywords || result.matchedKeywords.length === 0) && (
+//                         <p className="text-gray-500 text-sm">No specific keywords detected. Try adding more details to your job description.</p>
+//                       )}
+//                   </div>
+
+//                   {/* Ranked Candidates - Third */}
+//                   {matchResults.length > 1 && (
+//                     <div className="bg-white border rounded-xl p-6 shadow-sm">
+//                       <h3 className="font-semibold text-gray-900 mb-4">🏆 All Candidate Rankings</h3>
+//                       <p className="text-sm text-gray-600 mb-4">
+//                         {matchResults.length} resumes matched against your JD
+//                       </p>
+//                       <div className="space-y-3">
+//                         {matchResults.map((candidate, idx) => (
+//                           <div
+//                             key={candidate.id}
+//                             className={`flex items-center justify-between p-4 rounded-lg cursor-pointer transition-colors ${currentResumeId === candidate.id
+//                                 ? "bg-blue-50 border-2 border-blue-300"
+//                                 : "bg-gray-50 border-2 border-transparent"
+//                               }`}
+//                             onClick={() => loadResult({ id: candidate.id, name: candidate.name })}
+//                           >
+//                             <div className="flex items-center gap-3">
+//                               <span className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${idx === 0 ? "bg-yellow-100 text-yellow-700" :
+//                                   idx === 1 ? "bg-gray-200 text-gray-700" :
+//                                     idx === 2 ? "bg-orange-100 text-orange-700" :
+//                                       "bg-blue-50 text-blue-700"
+//                                 }`}>
+//                                 {idx + 1}
+//                               </span>
+//                               <div>
+//                                 <p className="font-medium text-gray-900">{candidate.name}</p>
+//                                 <p className="text-sm text-gray-500">{candidate.email}</p>
+//                               </div>
+//                             </div>
+//                             <div className="text-right">
+//                               <p className={`text-2xl font-bold ${candidate.matchPercentage >= 80 ? "text-emerald-600" :
+//                                   candidate.matchPercentage >= 60 ? "text-blue-600" :
+//                                     candidate.matchPercentage >= 40 ? "text-amber-600" :
+//                                       "text-rose-600"
+//                                 }`}>
+//                                 {candidate.matchPercentage}%
+//                               </p>
+//                               <button
+//                                 onClick={(e) => { e.stopPropagation(); deleteResume(candidate.id); }}
+//                                 className="text-xs text-gray-400 hover:text-red-500 mt-1"
+//                               >
+//                                 Delete
+//                               </button>
+//                             </div>
+//                           </div>
+//                         ))}
+//                       </div>
+//                     </div>
+//                   )}
+//                 </div>
+//               )}
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* Payment Modal */}
+//         {showPayment && (
+//           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+//             <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden relative">
+//               <button
+//                 onClick={() => setShowPayment(false)}
+//                 className="absolute top-4 right-4 text-gray-400 hover:text-gray-700 z-10"
+//               >
+//                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+//                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+//                 </svg>
+//               </button>
+
+//               <div className="p-6 text-center border-b border-gray-100">
+//                 <div className="text-3xl mb-2">🔒</div>
+//                 <h2 className="text-2xl font-bold text-gray-900">Unlock Full Access</h2>
+//                 <p className="text-gray-600 mt-1">Upgrade to unlock unlimited resume analyses.</p>
+//               </div>
+
+//               <div className="p-6">
+//                 <div className="flex flex-col sm:flex-row gap-6">
+//                   <div className="flex-1 border-2 border-indigo-200 rounded-xl p-6 hover:border-indigo-400 transition-all bg-gradient-to-br from-indigo-50/50 to-white">
+//                     <h3 className="text-xl font-bold text-indigo-900 mb-2">Basic</h3>
+//                     <div className="text-3xl font-bold text-indigo-700 mb-1">₹99</div>
+//                     <p className="text-indigo-600 text-sm mb-4">Unlimited resume analyses</p>
+//                     <button
+//                       onClick={() => handlePayment("basic")}
+//                       disabled={paymentLoading}
+//                       className="w-full py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors disabled:opacity-50"
+//                     >
+//                       {paymentLoading ? "Loading..." : "Pay ₹99"}
+//                     </button>
+//                   </div>
+//                   <div className="flex-1 border-2 border-purple-200 rounded-xl p-6 hover:border-purple-400 transition-all bg-gradient-to-br from-purple-50/50 to-white relative">
+//                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-purple-600 text-white px-4 py-1 rounded-full text-sm font-medium">
+//                       Most Popular
+//                     </div>
+//                     <h3 className="text-xl font-bold text-purple-900 mb-2">Premium</h3>
+//                     <div className="text-3xl font-bold text-purple-700 mb-1">₹499</div>
+//                     <p className="text-purple-600 text-sm mb-4">Full access + priority support</p>
+//                     <button
+//                       onClick={() => handlePayment("premium")}
+//                       disabled={paymentLoading}
+//                       className="w-full py-3 bg-purple-600 text-white rounded-xl font-semibold hover:bg-purple-700 transition-colors disabled:opacity-50"
+//                     >
+//                       {paymentLoading ? "Loading..." : "Pay ₹499"}
+//                     </button>
+//                   </div>
+//                 </div>
+//               </div>
+//             </div>
+//           </div>
+//         )}
+//       </div>
+//     </div>
+//   );
+// }
+
+
+
+
+
 import { useState, useEffect, useContext } from "react";
 import Field from "../components/Field";
 import LeftSidebar from "../components/LeftSidebar";
@@ -29,6 +981,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+  const [warning, setWarning] = useState("");
   const [fileName, setFileName] = useState("");
   const [showPayment, setShowPayment] = useState(false);
   const [isPaid, setIsPaid] = useState(false);
@@ -43,14 +996,12 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
   const [uploadedFile, setUploadedFile] = useState(null);
 
   useEffect(() => {
-    // Check if user is admin - admin has unlimited access
-    // Use stored user from JWT auth
     const storedUser = getStoredUser();
     const isAdmin = storedUser?.role === "admin";
     const hasSubscription = storedUser?.subscription === 'paid' ||
       storedUser?.subscriptionStatus === 'active' ||
       sessionStorage.getItem("resumeScreenerPaid") === "true";
-    
+
     if (isAdmin) {
       setIsPaid(true);
     } else {
@@ -60,11 +1011,9 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     }
     fetchUploadedResumes();
 
-    // Restore JD from sessionStorage if available
     const savedJD = sessionStorage.getItem("resumeScreenerJD");
     if (savedJD) {
       setJd(savedJD);
-      // Also restore match results if JD exists (delayed to ensure functions are defined)
       setTimeout(() => {
         if (savedJD.trim()) {
           matchAllResumes(savedJD);
@@ -96,7 +1045,6 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    // Handle multiple files for paid users
     if (isPaid && files.length > 1) {
       const newFiles = Array.from(files).map(file => ({
         file,
@@ -105,12 +1053,12 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
       }));
       setUploadedFiles(prev => [...prev, ...newFiles]);
     } else {
-      // Single file upload
       const file = files[0];
       setFileName(file.name);
       setUploadedFile(file);
     }
     setError("");
+    setWarning("");
     setIsProcessing(false);
   };
 
@@ -121,20 +1069,19 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
     setIsProcessing(true);
     setError("");
+    setWarning("");
 
-    // Validate file size first (client-side check)
-    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_FILE_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_FILE_SIZE) {
-      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB. Please use a smaller file or paste the JD text directly.`);
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB.`);
       setIsProcessing(false);
       return;
     }
 
-    // Validate file type
     const allowedTypes = ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword', 'text/plain'];
     const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt'];
     const fileExtension = file.name.toLowerCase().substring(file.name.lastIndexOf('.'));
-    
+
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension) && !file.type.startsWith('image/')) {
       setError("Invalid file type. Please upload a PDF, DOCX, DOC, TXT file or paste the JD text directly.");
       setIsProcessing(false);
@@ -142,77 +1089,40 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     }
 
     try {
-      // Send file to server for text extraction using the existing /upload-jd endpoint
       const formData = new FormData();
-      formData.append("jd", file); // Server expects 'jd' field name
+      formData.append("jd", file);
 
-      // Add timeout to prevent hanging requests
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout for OCR
 
       const response = await fetch(`${API_BASE}/api/resume/upload-jd`, {
         method: "POST",
         body: formData,
         signal: controller.signal,
       });
-      
+
       clearTimeout(timeoutId);
 
-      // Check if response is OK - handle non-OK responses
+      const data = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error("Server error:", response.status, errorText);
-
-        // Try to parse as JSON for more details
-        try {
-          const errorData = JSON.parse(errorText);
-          if (errorData.error) {
-            if (errorData.isScanned || errorData.error.toLowerCase().includes('scanned')) {
-              setError("This file appears to be a scanned document. Please convert it to a text-based PDF, DOCX, or use the text input below.");
-            } else if (errorData.error.toLowerCase().includes('stream ended') || errorData.error.toLowerCase().includes('corrupted')) {
-              setError("This PDF file appears to be corrupted or scanned. Please try a different file or paste the JD text directly.");
-            } else if (errorData.suggestion) {
-              setError(errorData.error + " " + errorData.suggestion);
-            } else {
-              setError("Failed to read JD file: " + errorData.error);
-            }
-          } else {
-            setError("Server error: " + response.status + ". Please try a different file or paste the JD text.");
-          }
-        } catch {
-          // Not JSON response
-          setError("Server error (code " + response.status + "). Please try a different file or paste the JD text.");
-        }
+        const msg = data.error || `Server error: ${response.status}`;
+        const suggestion = data.suggestion || "Please paste the JD text directly.";
+        setError(`${msg} ${suggestion}`);
         setIsProcessing(false);
         return;
       }
 
-      const data = await response.json();
-
-      // Handle different error cases with user-friendly messages
-      if (data.error) {
-        console.error("Failed to extract text from JD file:", data.error);
-
-        // Provide specific error messages based on the error type
-        if (data.isScanned || data.error.toLowerCase().includes('scanned')) {
-          setError("This file appears to be a scanned document. Please convert it to a text-based PDF, DOCX, or use the text input below.");
-        } else if (data.error.toLowerCase().includes('stream ended') || data.error.toLowerCase().includes('corrupted')) {
-          setError("This PDF file appears to be corrupted or scanned. Please try a different file or paste the JD text directly.");
-        } else if (data.suggestion) {
-          setError(data.error + " " + data.suggestion);
-        } else {
-          setError("Failed to read JD file: " + data.error);
-        }
-        setIsProcessing(false);
-        return;
-      }
-
-      // Check for empty extraction
       const extractedText = data.text || "";
       if (!extractedText || !extractedText.trim()) {
-        setError("Could not extract any text from this file. Please try pasting the JD instead or use a different file format.");
+        setError("Could not extract any text from this file. Please try pasting the JD instead.");
         setIsProcessing(false);
         return;
+      }
+
+      // Show warning for scanned documents but still proceed
+      if (data.isScanned || data.warning) {
+        setWarning(data.warning || "Scanned document detected - OCR was used. Please verify the extracted text is accurate.");
       }
 
       setJd(extractedText);
@@ -220,22 +1130,25 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
       setJdFileName(file.name);
       sessionStorage.setItem("resumeScreenerJD", extractedText);
 
-      // If there are resumes, re-match with new JD
       if (uploadedResumes.length > 0 || uploadedFile || uploadedFiles.length > 0) {
         setTimeout(() => matchAllResumes(extractedText), 100);
       }
     } catch (err) {
-      console.error("JD upload error:", err);
-      setError("Failed to process JD file. Please try a different file or paste the JD text directly.");
+      if (err.name === 'AbortError') {
+        setError("Request timed out. The file may be too complex for OCR. Please paste the JD text directly.");
+      } else {
+        console.error("JD upload error:", err);
+        setError("Failed to process JD file. Please try a different file or paste the JD text directly.");
+      }
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // Clear JD file and use text area instead
   const clearJDFile = () => {
     setJdFile(null);
     setJdFileName("");
+    setWarning("");
   };
 
   // Analyze and automatically store resume in database
@@ -246,7 +1159,6 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
       return;
     }
 
-    // Check free trials - only for non-paid users
     if (!isPaid && trialCount >= MAX_FREE_TRIALS) {
       setShowPayment(true);
       return;
@@ -254,24 +1166,20 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
     setIsProcessing(true);
     setError("");
+    setWarning("");
 
     try {
-      // Handle multiple files for paid users
       if (uploadedFiles.length > 0) {
-        // Process multiple resumes
         for (const fileObj of uploadedFiles) {
           await processSingleResume(fileObj.file, fileObj.name);
         }
-        // Clear uploaded files after processing
         setUploadedFiles([]);
         setFileName("");
         setUploadedFile(null);
 
-        // Match all resumes against JD in background
         matchAllResumes(jd);
         fetchUploadedResumes();
       } else if (uploadedFile) {
-        // Process single resume (existing logic)
         await processSingleResume(uploadedFile, fileName);
       }
     } catch (e) {
@@ -290,45 +1198,70 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
 
     console.log(`[Upload] Starting upload for: ${name}`);
 
-    const uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
-      method: "POST",
-      body: formData,
-    });
+    // Use longer timeout for scanned PDFs which need OCR
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 2 minute timeout for OCR
 
-    if (!uploadResponse.ok) {
-      const errorText = await uploadResponse.text();
-      console.error("[Upload] Failed response:", errorText);
-      try {
-        const errorData = JSON.parse(errorText);
-        setError(errorData.error || `Upload failed: ${uploadResponse.status}`);
-      } catch {
-        setError(`Upload failed: ${uploadResponse.status}`);
+    let uploadResponse;
+    try {
+      uploadResponse = await fetch(`${API_BASE}/api/resume/upload`, {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+    } catch (fetchErr) {
+      clearTimeout(timeoutId);
+      if (fetchErr.name === 'AbortError') {
+        setError("Upload timed out. The file may be a complex scanned document. Please try a text-based PDF or DOCX.");
+      } else {
+        setError("Network error during upload. Please check your connection and try again.");
       }
       return null;
     }
+    clearTimeout(timeoutId);
 
-    const uploadData = await uploadResponse.json();
+    // Parse response - handle both success and error cases
+    let uploadData;
+    try {
+      uploadData = await uploadResponse.json();
+    } catch {
+      setError(`Upload failed with status ${uploadResponse.status}. Please try again.`);
+      return null;
+    }
+
     console.log("[Upload] Response received:", {
       success: uploadData.success,
       hasText: !!uploadData.text,
       textLength: uploadData.text?.length,
-      textLengthField: uploadData.textLength,
       extractionMethod: uploadData.extractionMethod,
-      id: uploadData.id
+      isScanned: uploadData.isScanned,
+      id: uploadData.id,
+      status: uploadResponse.status,
     });
+
+    // Handle server-side errors
+    if (!uploadResponse.ok) {
+      const errMsg = uploadData.error || `Upload failed: ${uploadResponse.status}`;
+      const suggestion = uploadData.suggestion || "";
+      setError(errMsg + (suggestion ? ` ${suggestion}` : ""));
+      return null;
+    }
 
     if (uploadData.error) {
       setError(uploadData.error + (uploadData.suggestion ? ` ${uploadData.suggestion}` : ""));
       return null;
     }
 
-    // FIXED: Server may not return text field directly - fetch it using the ID
+    // Show warning for scanned documents but continue processing
+    if (uploadData.isScanned || uploadData.warning) {
+      setWarning(uploadData.warning || "⚠️ Scanned document detected - OCR was used. Results may vary based on scan quality.");
+    }
+
+    // Get the extracted text - first from response, then fetch from DB if needed
     let extractedText = uploadData.text || uploadData.resumeText;
-    
+
     if (!extractedText || !extractedText.trim()) {
       console.log("[Upload] Text not in response, fetching from database using ID:", uploadData.id);
-      
-      // Fetch the resume text from the database using the ID
       try {
         const resumeResponse = await fetch(`${API_BASE}/api/resume/${uploadData.id}`);
         if (resumeResponse.ok) {
@@ -340,60 +1273,51 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
         console.error("[Upload] Failed to fetch resume text:", err);
       }
     }
-    
+
     if (!extractedText || !extractedText.trim()) {
-      setError("Failed to extract text from resume. The file may be empty, scanned, or corrupted.");
+      setError("Failed to extract text from resume. The file may be empty or corrupted.");
       console.error("[Upload] No text extracted - uploadData:", uploadData);
       return null;
     }
 
     console.log(`[Upload] ✅ Success: ${extractedText.length} chars extracted via ${uploadData.extractionMethod}`);
 
-    // Validate JD before analyzing
     if (!jd || !jd.trim()) {
       setError("Please enter a job description before analyzing the resume.");
       return;
     }
 
-    // Debug logging
     console.log("[Analyze] Sending request with:", {
       jdLength: jd?.length || 0,
       resumeTextLength: extractedText?.length || 0,
-      jdPreview: jd?.substring(0, 100),
-      resumePreview: extractedText?.substring(0, 100)
     });
 
-    // Analyze the resume - FIXED: Use extractedText instead of uploadData.text
     const analyzeResponse = await fetch(`${API_BASE}/api/analysis/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ jdText: jd, resumeText: extractedText }),
     });
 
-    if (!analyzeResponse.ok) {
-      const errorText = await analyzeResponse.text();
-      console.error("[Analyze] Failed response:", errorText);
-      try {
-        const errorData = JSON.parse(errorText);
-        setError(errorData.error || `Server error: ${analyzeResponse.status}`);
-      } catch {
-        setError(`Server error: ${analyzeResponse.status}`);
-      }
-      return;
+    let analyzeData;
+    try {
+      analyzeData = await analyzeResponse.json();
+    } catch {
+      setError(`Analysis server error: ${analyzeResponse.status}`);
+      return null;
     }
 
-    const analyzeData = await analyzeResponse.json();
-
-    if (analyzeData.error) {
-      setError(analyzeData.error);
-    } else {
-      setResult(analyzeData);
-      setCurrentResumeId(uploadData.id);
-      setHasAnalyzed(true);
-
-      // Update trial count in background (for non-paid users)
-      if (!isPaid) updateTrialCount(trialCount + 1);
+    if (!analyzeResponse.ok || analyzeData.error) {
+      setError(analyzeData.error || `Analysis server error: ${analyzeResponse.status}`);
+      return null;
     }
+
+    setResult(analyzeData);
+    setCurrentResumeId(uploadData.id);
+    setHasAnalyzed(true);
+
+    if (!isPaid) updateTrialCount(trialCount + 1);
+
+    return analyzeData;
   };
 
   // Match all resumes against the current JD
@@ -560,7 +1484,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     <div className="flex min-h-screen bg-gray-100">
       <LeftSidebar app={app} isPro={isPaid} backTo="/customer" />
       <div className="flex-1 ml-80 min-h-screen flex flex-col">
-        {/* Sticky Header - App Name at top of right side */}
+        {/* Sticky Header */}
         <div className="flex-shrink-0 sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
           <div className="px-4 sm:px-6 py-3 flex items-center justify-between gap-4">
             <div className="min-w-0">
@@ -581,6 +1505,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
             </div>
           </div>
         </div>
+
         {/* Scrollable content */}
         <div className="flex-1 overflow-hidden flex">
           <div className="w-1/2 h-screen overflow-hidden flex flex-col">
@@ -594,6 +1519,13 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                   {error && (
                     <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                       {error}
+                    </div>
+                  )}
+
+                  {warning && !error && (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-700 text-sm flex items-start gap-2">
+                      <span className="flex-shrink-0">⚠️</span>
+                      <span>{warning}</span>
                     </div>
                   )}
 
@@ -653,6 +1585,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                         setJd(e.target.value);
                         setJdFile(null);
                         setJdFileName("");
+                        setWarning("");
                         sessionStorage.setItem("resumeScreenerJD", e.target.value);
                       }}
                       className="w-full h-32 rounded-lg border border-gray-300 p-3 text-sm focus:ring-2 focus:ring-blue-500 resize-none"
@@ -677,7 +1610,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                       {isProcessing ? (
                         <div className="text-center">
                           <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mb-2" />
-                          <p className="text-gray-600 text-sm">Processing...</p>
+                          <p className="text-gray-600 text-sm">Processing (OCR may take up to 60s)...</p>
                         </div>
                       ) : uploadedFile || uploadedFiles.length > 0 ? (
                         <div className="text-center">
@@ -720,7 +1653,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        Analyzing & Storing...
+                        Analyzing & Storing... (OCR may take a moment)
                       </span>
                     ) : (
                       uploadedFiles.length > 1
@@ -753,12 +1686,21 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                       <li className="flex items-start"><span className="mr-2">✓</span><span>Cosine similarity percentage (0-100%)</span></li>
                       <li className="flex items-start"><span className="mr-2">✓</span><span>Technical/Non-technical role detection</span></li>
                       <li className="flex items-start"><span className="mr-2">✓</span><span>Key suggestions to improve your resume</span></li>
+                      <li className="flex items-start"><span className="mr-2">✓</span><span>Supports scanned PDFs via OCR</span></li>
                     </ul>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4 pb-6">
-                  {/* Overall Score - First */}
+                  {/* Warning for scanned docs */}
+                  {warning && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-700 text-sm flex items-start gap-2">
+                      <span className="flex-shrink-0 mt-0.5">⚠️</span>
+                      <span>{warning}</span>
+                    </div>
+                  )}
+
+                  {/* Overall Score */}
                   <div className="bg-white border rounded-xl p-6 shadow-sm">
                     <div className="flex items-center justify-between mb-4">
                       <h3 className="font-semibold text-gray-900">Overall Match Score</h3>
@@ -794,11 +1736,10 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                     </div>
                   </div>
 
-                  {/* Suggestions - Second */}
+                  {/* Suggestions */}
                   <div className="bg-white border rounded-xl p-6 shadow-sm">
                     <h3 className="font-semibold text-gray-900 mb-4">💡 Suggestions to Improve</h3>
 
-                    {/* Missing Keywords */}
                     {result.missingKeywords && result.missingKeywords.length > 0 && (
                       <div className="mb-4">
                         <h4 className="text-sm font-medium text-rose-700 mb-2">Add these missing skills:</h4>
@@ -812,7 +1753,6 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                       </div>
                     )}
 
-                    {/* Matched Keywords */}
                     {result.matchedKeywords && result.matchedKeywords.length > 0 && (
                       <div>
                         <h4 className="text-sm font-medium text-emerald-700 mb-2">Already matching:</h4>
@@ -832,7 +1772,7 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
                       )}
                   </div>
 
-                  {/* Ranked Candidates - Third */}
+                  {/* Ranked Candidates */}
                   {matchResults.length > 1 && (
                     <div className="bg-white border rounded-xl p-6 shadow-sm">
                       <h3 className="font-semibold text-gray-900 mb-4">🏆 All Candidate Rankings</h3>
@@ -945,8 +1885,3 @@ export default function ResumeScreenerLite({ app = defaultApp }) {
     </div>
   );
 }
-
-
-
-
-

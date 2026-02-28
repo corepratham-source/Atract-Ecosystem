@@ -37,6 +37,7 @@ export const register = async (name, email, password, role = "customer") => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ name, email, password, role }),
+    credentials: "include",
   });
 
   const data = await response.json();
@@ -61,6 +62,7 @@ export const login = async (email, password) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ email, password }),
+    credentials: "include",
   });
 
   const data = await response.json();
@@ -88,6 +90,7 @@ export const logout = async () => {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+      credentials: "include",
     });
   } catch (error) {
     console.error("Logout API error:", error);

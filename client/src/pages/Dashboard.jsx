@@ -8,7 +8,7 @@ import { microApps } from "../data/microApps";
 import { API_BASE } from "../config/api";
 import { getStoredUser, STORAGE_KEY } from "../constants/user";
 import { AuthContext } from "../context/AuthContext";
-const API_URL = `${API_BASE}/apps`;
+const API_URL = `${API_BASE}/api/apps`;
 
 const FETCH_TIMEOUT_MS = 6000;
 
@@ -136,7 +136,7 @@ export default function Dashboard({ isPro = false }) {
       setApps(prevApps => prevApps.map(a => a._id === appId ? updatedApp : a));
 
       // Update backend
-      await axios.put(`${API_BASE}/apps/${appId}`, updatedApp);
+      await axios.put(`${API_BASE}/api/apps/${appId}`, updatedApp);
     } catch (err) {
       console.error("Failed to track app usage:", err);
     }

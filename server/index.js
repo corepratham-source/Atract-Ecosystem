@@ -213,10 +213,12 @@ require("dotenv").config();
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
+const cookieParser = require("cookie-parser");
 const path = require("path");
 const fs = require("fs");
 
 const AppMetric = require("./models/appmetric");
+const authRoutes = require("./routes/authRoutes");
 
 const analysisRoutes = require("./routes/analysisRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
@@ -236,9 +238,12 @@ const app = express();
 // ================= CORS =================
 
 app.use(cors({
-  origin: "*",
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
   credentials: true
 }));
+
+// Cookie parser for auth
+app.use(cookieParser());
 
 
 // ================= BODY PARSER =================
@@ -293,7 +298,7 @@ function sanitizeApp(body) {
 
 // GET
 
-app.get("/apps", async (req, res) => {
+app.get("/api/apps", async (req, res) => {
 
   try {
 
@@ -314,7 +319,7 @@ app.get("/apps", async (req, res) => {
 
 // POST
 
-app.post("/apps", async (req, res) => {
+app.post("/api/apps", async (req, res) => {
 
   const payload = sanitizeApp(req.body);
 
@@ -357,7 +362,7 @@ app.post("/apps", async (req, res) => {
 
 // PUT
 
-app.put("/apps/:id", async (req, res) => {
+app.put("/api/apps/:id", async (req, res) => {
 
   const id = req.params.id;
 
@@ -408,7 +413,7 @@ app.put("/apps/:id", async (req, res) => {
 
 // DELETE
 
-app.delete("/apps/:id", async (req, res) => {
+app.delete("/api/apps/:id", async (req, res) => {
 
   const id = req.params.id;
 
@@ -442,6 +447,8 @@ app.delete("/apps/:id", async (req, res) => {
 
 // ================= OTHER ROUTES =================
 
+
+app.use("/api/auth", authRoutes);
 
 app.use("/api/analysis", analysisRoutes);
 

@@ -534,6 +534,14 @@ const cookieParser = require("cookie-parser");
 const path = require("path");
 const fs = require("fs");
 
+// Prevent hard-crash on unexpected async errors (log instead of exiting)
+process.on("unhandledRejection", (reason) => {
+  console.error("[Process] Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[Process] Uncaught exception:", err);
+});
+
 const AppMetric = require("./models/appmetric");
 const analysisRoutes = require("./routes/analysisRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
@@ -634,8 +642,9 @@ function sanitizeApp(body) {
 
 // ────────────────────────────────────────────────
 // /apps CRUD Endpoints (Mongo + Memory fallback)
+// NOTE: Keep both legacy `/apps` and new `/api/apps` for compatibility.
 // ────────────────────────────────────────────────
-app.get("/apps", async (req, res) => {
+async function handleGetApps(req, res) {
   try {
     if (isMongoConnected) {
       const apps = await AppMetric.find();
@@ -645,9 +654,9 @@ app.get("/apps", async (req, res) => {
     console.warn("MongoDB GET /apps failed:", err.message);
   }
   res.json(memoryStore.length ? memoryStore : []);
-});
+}
 
-app.post("/apps", async (req, res) => {
+async function handlePostApps(req, res) {
   const payload = sanitizeApp(req.body);
   try {
     if (isMongoConnected) {
@@ -661,9 +670,9 @@ app.post("/apps", async (req, res) => {
   const newItem = { _id: `mem_${memoryIdCounter++}`, ...payload };
   memoryStore.push(newItem);
   res.status(201).json(newItem);
-});
+}
 
-app.put("/apps/:id", async (req, res) => {
+async function handlePutApps(req, res) {
   const id = req.params.id;
   const payload = sanitizeApp(req.body);
   try {
@@ -680,9 +689,9 @@ app.put("/apps/:id", async (req, res) => {
     return res.json(memoryStore[idx]);
   }
   res.status(404).json({ error: "App not found" });
-});
+}
 
-app.delete("/apps/:id", async (req, res) => {
+async function handleDeleteApps(req, res) {
   const id = req.params.id;
   try {
     if (isMongoConnected && !id.startsWith("mem_")) {
@@ -698,7 +707,19 @@ app.delete("/apps/:id", async (req, res) => {
     return res.json({ message: "App deleted" });
   }
   res.status(404).json({ error: "App not found" });
-});
+}
+
+// Legacy routes
+app.get("/apps", handleGetApps);
+app.post("/apps", handlePostApps);
+app.put("/apps/:id", handlePutApps);
+app.delete("/apps/:id", handleDeleteApps);
+
+// New API-prefixed routes
+app.get("/api/apps", handleGetApps);
+app.post("/api/apps", handlePostApps);
+app.put("/api/apps/:id", handlePutApps);
+app.delete("/api/apps/:id", handleDeleteApps);
 
 // ────────────────────────────────────────────────
 // API Routes

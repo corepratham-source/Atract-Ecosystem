@@ -38,6 +38,9 @@ const clearAuthCookie = (res) => {
 router.post("/register", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
+    console.log("[Register] Attempting registration for:", email);
+    console.log("[Register] Request body:", JSON.stringify(req.body));
+    
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
     }
@@ -49,18 +52,32 @@ router.post("/register", async (req, res) => {
     const allowedRoles = ["admin", "customer"];
     const userRole = allowedRoles.includes(String(role).toLowerCase()) ? String(role).toLowerCase() : "customer";
 
-    const existing = await User.findOne({ email: String(email).trim().toLowerCase() });
-    if (existing) {
-      return res.status(400).json({ error: "Email already registered" });
-    }
-
+    const normalizedEmail = String(email).trim().toLowerCase();
+    console.log("[Register] Checking for existing user:", normalizedEmail);
+    
+    // Always hash the incoming password
+    console.log("[Register] Hashing password...");
     const hashed = await bcrypt.hash(password, 10);
-    const user = await User.create({
-      name: (name || "").trim() || email.split("@")[0],
-      email: String(email).trim().toLowerCase(),
-      password: hashed,
-      role: userRole,
-    });
+
+    // If user already exists, update their password and role instead of failing
+    let user = await User.findOne({ email: normalizedEmail });
+    if (user) {
+      console.log("[Register] User already exists, updating password and role:", normalizedEmail);
+      user.password = hashed;
+      user.role = userRole;
+      user.name = (name || "").trim() || user.name || email.split("@")[0];
+      await user.save();
+    } else {
+      console.log("[Register] Creating new user...");
+      user = await User.create({
+        name: (name || "").trim() || email.split("@")[0],
+        email: normalizedEmail,
+        password: hashed,
+        role: userRole,
+      });
+    }
+    
+    console.log("[Register] User ready:", user.email, "Role:", user.role);
 
     // Generate JWT and set HTTP-only cookie
     const token = generateToken(user);
@@ -86,23 +103,38 @@ router.post("/register", async (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log("[Login] Attempting login for:", email);
+    console.log("[Login] Request body:", JSON.stringify(req.body));
+    
     if (!email || !password) {
+      console.log("[Login] Missing email or password");
       return res.status(400).json({ error: "Email and password are required" });
     }
 
-    const user = await User.findOne({ email: String(email).trim().toLowerCase() });
+    const normalizedEmail = String(email).trim().toLowerCase();
+    console.log("[Login] Looking for user with email:", normalizedEmail);
+    
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
+      console.log("[Login] User not found");
       return res.status(401).json({ error: "Invalid email or password" });
     }
-
+    
+    console.log("[Login] User found:", user.email, "Role:", user.role);
+    
     const match = await bcrypt.compare(password, user.password);
+    console.log("[Login] Password match result:", match);
+    
     if (!match) {
+      console.log("[Login] Password does not match");
       return res.status(401).json({ error: "Invalid email or password" });
     }
 
     // Generate JWT and set HTTP-only cookie
     const token = generateToken(user);
     res.cookie(COOKIE_NAME, token, cookieOptions);
+    
+    console.log("[Login] Success! Token generated for user:", user.email);
 
     res.json({
       message: "Login successful",
@@ -115,13 +147,19 @@ router.post("/login", async (req, res) => {
       },
     });
   } catch (err) {
-    console.error("Login error:", err);
+    console.error("[Login] Error:", err);
     res.status(500).json({ error: err.message || "Login failed" });
   }
 });
 
 // Logout
 router.post("/logout", (req, res) => {
+  // Try to get token from cookie or header to invalidate if needed
+  const token = req.cookies[COOKIE_NAME] || 
+    (req.headers.authorization && req.headers.authorization.startsWith("Bearer ") 
+      ? req.headers.authorization.substring(7) 
+      : null);
+  
   clearAuthCookie(res);
   res.json({ message: "Logged out successfully" });
 });
@@ -129,7 +167,16 @@ router.post("/logout", (req, res) => {
 // Verify token (for checking auth status)
 router.get("/verify", async (req, res) => {
   try {
-    const token = req.cookies[COOKIE_NAME];
+    // First try to get token from cookie
+    let token = req.cookies[COOKIE_NAME];
+    
+    // If no cookie, try Authorization header
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
     
     if (!token) {
       return res.status(401).json({ authenticated: false });
@@ -162,7 +209,16 @@ router.get("/verify", async (req, res) => {
 // Refresh token (extend session)
 router.post("/refresh", async (req, res) => {
   try {
-    const token = req.cookies[COOKIE_NAME];
+    // First try to get token from cookie
+    let token = req.cookies[COOKIE_NAME];
+    
+    // If no cookie, try Authorization header
+    if (!token) {
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        token = authHeader.substring(7);
+      }
+    }
     
     if (!token) {
       return res.status(401).json({ error: "No token found" });
