@@ -1,9 +1,9 @@
 // Service Worker for ATRact PWA
 // Provides offline support and caching strategies
 
-const CACHE_NAME = 'atract-v4';
-const STATIC_CACHE = 'atract-static-v4';
-const DYNAMIC_CACHE = 'atract-dynamic-v4';
+const CACHE_NAME = 'atract-v5';
+const STATIC_CACHE = 'atract-static-v5';
+const DYNAMIC_CACHE = 'atract-dynamic-v5';
 
 // Assets to cache immediately on install
 const STATIC_ASSETS = [
@@ -60,21 +60,15 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // API requests - Network First strategy
+  // API requests - Network First strategy (no caching for API)
   if (url.pathname.startsWith('/api')) {
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkOnly(request));
     return;
   }
 
-  // Static assets in /public - Cache First strategy (but not /src files)
+  // Static assets in /public - Cache First strategy
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|ico|woff|woff2)$/) && !url.pathname.startsWith('/src')) {
     event.respondWith(cacheFirst(request));
-    return;
-  }
-
-  // JS files from /src directory - Network First (for development)
-  if (url.pathname.startsWith('/src/')) {
-    event.respondWith(networkFirst(request));
     return;
   }
 
@@ -84,9 +78,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default - Network First
-  event.respondWith(networkFirst(request));
+  // Default - Network Only (don't cache other assets)
+  event.respondWith(networkOnly(request));
 });
+
+// Network Only - Always try network, fail if offline (no fallback for API)
+async function networkOnly(request) {
+  try {
+    const networkResponse = await fetch(request);
+    return networkResponse;
+  } catch (error) {
+    console.log('[SW] Network Only - Failed:', request.url, error.message);
+    // Return a proper error response instead of "Offline" text
+    return new Response(JSON.stringify({ error: 'Network unavailable', message: 'Please check your internet connection' }), {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
+}
 
 // Cache First Strategy - Check cache, then network
 async function cacheFirst(request) {
@@ -104,7 +114,12 @@ async function cacheFirst(request) {
     return networkResponse;
   } catch (error) {
     console.log('[SW] Cache First - Network failed:', error);
-    return new Response('Offline', { status: 503 });
+    // Return a proper error instead of "Offline" text
+    return new Response('Service unavailable', { 
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' }
+    });
   }
 }
 
@@ -126,12 +141,17 @@ async function networkFirst(request) {
 
     // Return offline page for HTML requests
     if (request.headers.get('accept')?.includes('text/html')) {
-      return caches.match('/');
+      const offlinePage = await caches.match('/');
+      if (offlinePage) {
+        return offlinePage;
+      }
     }
 
-    return new Response('Offline', { 
+    // Return a proper JSON error response
+    return new Response(JSON.stringify({ error: 'Offline', message: 'Please check your internet connection' }), { 
       status: 503,
-      statusText: 'Service Unavailable'
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'application/json' }
     });
   }
 }

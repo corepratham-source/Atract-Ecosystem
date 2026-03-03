@@ -4,10 +4,24 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: cd server && npm install && cd ../client && npm install && npm run build
-    startCommand: node server/index.js
+    buildCommand: npm run build
+    startCommand: npm run start
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: "20"
+      - key: PORT
+        value: "5000"
+      - key: MONGO_URI
+        value: mongodb+srv://atractAdmin:Atract123@atractecosystem.cugl68m.mongodb.net/?appName=atractEcosystem
+      - key: JWT_SECRET
+        value: atract-jwt-secret-change-in-production-2024
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: COOKIE_NAME
+        value: atract_token
+      - key: CLIENT_URL
+        value: https://atract-ecosystem.onrender.com
+      # NOTE: Add GROQ_API_KEY in Render Dashboard (Settings > Environment Variables)
+      # Do NOT commit secrets to GitHub

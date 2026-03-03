@@ -1,13 +1,20 @@
 {
-  "name": "attract-dashboard",
+  "name": "atract-dashboard",
   "version": "1.0.0",
   "private": true,
-  "main": "server/server.js",
+  "main": "server/index.js",
   "scripts": {
-    "build": "npm install --prefix client && npm run build --prefix client && npm install --prefix server",
-    "start": "node server/server.js"
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js",
+    "dev": "cd client && npm run dev",
+    "postinstall": "cd server && npm install"
   },
   "engines": {
-    "node": "20.x"
-  }
+    "node": ">=18.0.0"
+  },
+  "keywords": ["hr", "dashboard", "react", "express"],
+  "author": "",
+  "license": "ISC",
+  "description": "ATRact HR Dashboard"
 }
