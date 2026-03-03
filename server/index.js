@@ -238,16 +238,40 @@ const app = express();
 
 let isMongoConnected = false;
 
+// Simpler MongoDB options - let Mongoose handle more things automatically
 const mongoOptions = {
-  serverSelectionTimeoutMS: 30000,    // 30 seconds to select a server
-  socketTimeoutMS: 60000,              // 60 seconds for socket timeout
-  maxPoolSize: 10,                     // Connection pool size
-  retryWrites: true,                   // Retry failed writes
-  retryReads: true,                    // Retry failed reads
-  connectTimeoutMS: 30000,             // 30 seconds connection timeout
+  serverSelectionTimeoutMS: 30000,
+  socketTimeoutMS: 45000,
+  maxPoolSize: 10,
 };
 
 mongoose.set("strictQuery", false);
+
+// Disable query buffering - queries won't queue when disconnected
+mongoose.set("bufferCommands", false);
+
+// Log all Mongoose events
+mongoose.connection.on("connecting", () => {
+  console.log("🔄 MongoDB: Connecting...");
+});
+
+mongoose.connection.on("connected", () => {
+  console.log("✅ MongoDB: Connected!");
+  isMongoConnected = true;
+});
+
+mongoose.connection.on("disconnected", () => {
+  console.warn("⚠️ MongoDB: Disconnected");
+  isMongoConnected = false;
+});
+
+mongoose.connection.on("error", (err) => {
+  console.error("❌ MongoDB Error:", err.message);
+});
+
+mongoose.connection.on("close", () => {
+  console.log("🔌 MongoDB: Connection closed");
+});
 
 const connectWithRetry = async (attempt = 1) => {
   const maxRetries = 10;
@@ -258,18 +282,6 @@ const connectWithRetry = async (attempt = 1) => {
     await mongoose.connect(process.env.MONGO_URI, mongoOptions);
     console.log("✅ MongoDB connected successfully!");
     isMongoConnected = true;
-    
-    // Set up connection event listeners
-    mongoose.connection.on("disconnected", () => {
-      console.warn("⚠️ MongoDB disconnected. Attempting to reconnect...");
-      isMongoConnected = false;
-      connectWithRetry();
-    });
-    
-    mongoose.connection.on("error", (err) => {
-      console.error("MongoDB error:", err.message);
-    });
-    
   } catch (err) {
     isMongoConnected = false;
     console.error(`❌ MongoDB connection attempt #${attempt} failed:`, err.message);
@@ -286,10 +298,13 @@ const connectWithRetry = async (attempt = 1) => {
 };
 
 // Start MongoDB connection
+console.log("MONGO_URI available:", !!process.env.MONGO_URI);
+console.log("MONGO_URI value:", process.env.MONGO_URI ? "(present)" : "(missing)");
+
 if (process.env.MONGO_URI) {
   connectWithRetry();
 } else {
-  console.warn("⚠️ No MONGO_URI provided. Running in DEMO/MEMORY mode.");
+  console.error("🚫 No MONGO_URI provided! Database will not work.");
 }
 
 // ================= CORS =================
