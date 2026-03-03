@@ -5,7 +5,7 @@ services:
     plan: free
     region: oregon
     buildCommand: cd server && npm install && cd ../client && npm install && npm run build
-    startCommand: node server/server.js
+    startCommand: node server/index.js
     envVars:
       - key: NODE_ENV
         value: production

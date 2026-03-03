@@ -2,11 +2,15 @@ const express = require("express");
 const router = express.Router();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
 const User = require("../models/Users");
 
 const JWT_SECRET = process.env.JWT_SECRET || "atract-super-secret-key-change-in-production";
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const COOKIE_NAME = process.env.COOKIE_NAME || "atract_token";
+
+// Helper to check if MongoDB is connected
+const isDbReady = () => mongoose.connection.readyState === 1;
 
 // Cookie options for HTTP-only secure cookies
 const cookieOptions = {
@@ -39,7 +43,6 @@ router.post("/register", async (req, res) => {
   try {
     const { name, email, password, role } = req.body;
     console.log("[Register] Attempting registration for:", email);
-    console.log("[Register] Request body:", JSON.stringify(req.body));
     
     if (!email || !password) {
       return res.status(400).json({ error: "Email and password are required" });
@@ -49,6 +52,12 @@ router.post("/register", async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 6 characters" });
     }
 
+    // Check if MongoDB is connected
+    if (!isDbReady()) {
+      console.warn("[Register] MongoDB not connected. Cannot register user.");
+      return res.status(503).json({ error: "Database unavailable. Please try again later." });
+    }
+    
     const allowedRoles = ["admin", "customer"];
     const userRole = allowedRoles.includes(String(role).toLowerCase()) ? String(role).toLowerCase() : "customer";
 
@@ -104,11 +113,16 @@ router.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
     console.log("[Login] Attempting login for:", email);
-    console.log("[Login] Request body:", JSON.stringify(req.body));
     
     if (!email || !password) {
       console.log("[Login] Missing email or password");
       return res.status(400).json({ error: "Email and password are required" });
+    }
+
+    // Check if MongoDB is connected
+    if (!isDbReady()) {
+      console.warn("[Login] MongoDB not connected. Cannot authenticate user.");
+      return res.status(503).json({ error: "Database unavailable. Please try again later." });
     }
 
     const normalizedEmail = String(email).trim().toLowerCase();
@@ -184,6 +198,20 @@ router.get("/verify", async (req, res) => {
 
     const decoded = jwt.verify(token, JWT_SECRET);
     
+    // Check if MongoDB is connected
+    if (!isDbReady()) {
+      // If no DB, return basic info from token (demo mode)
+      return res.json({
+        authenticated: true,
+        demo: true,
+        user: {
+          id: decoded.id,
+          email: decoded.email,
+          role: decoded.role
+        }
+      });
+    }
+    
     // Optionally refresh user data from database
     const user = await User.findById(decoded.id).select("-password");
     if (!user) {
@@ -225,6 +253,21 @@ router.post("/refresh", async (req, res) => {
     }
 
     const decoded = jwt.verify(token, JWT_SECRET);
+    
+    // Check if MongoDB is connected
+    if (!isDbReady()) {
+      // In demo mode, just return success without DB lookup
+      return res.json({
+        message: "Token refreshed (demo mode)",
+        demo: true,
+        user: {
+          id: decoded.id,
+          email: decoded.email,
+          role: decoded.role
+        }
+      });
+    }
+    
     const user = await User.findById(decoded.id);
     
     if (!user) {

@@ -234,30 +234,96 @@ const resumeRoutes = require("./routes/resumeRoutes");
 
 const app = express();
 
+// ================= MONGODB CONNECTION WITH RETRY =================
+
+let isMongoConnected = false;
+
+const mongoOptions = {
+  serverSelectionTimeoutMS: 30000,    // 30 seconds to select a server
+  socketTimeoutMS: 60000,              // 60 seconds for socket timeout
+  maxPoolSize: 10,                     // Connection pool size
+  retryWrites: true,                   // Retry failed writes
+  retryReads: true,                    // Retry failed reads
+  connectTimeoutMS: 30000,             // 30 seconds connection timeout
+};
+
+mongoose.set("strictQuery", false);
+
+const connectWithRetry = async (attempt = 1) => {
+  const maxRetries = 10;
+  const baseDelay = 5000; // 5 seconds
+  
+  try {
+    console.log(`MongoDB connection attempt #${attempt}...`);
+    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+    console.log("✅ MongoDB connected successfully!");
+    isMongoConnected = true;
+    
+    // Set up connection event listeners
+    mongoose.connection.on("disconnected", () => {
+      console.warn("⚠️ MongoDB disconnected. Attempting to reconnect...");
+      isMongoConnected = false;
+      connectWithRetry();
+    });
+    
+    mongoose.connection.on("error", (err) => {
+      console.error("MongoDB error:", err.message);
+    });
+    
+  } catch (err) {
+    isMongoConnected = false;
+    console.error(`❌ MongoDB connection attempt #${attempt} failed:`, err.message);
+    
+    if (attempt < maxRetries) {
+      // Exponential backoff: 5s, 10s, 15s, 20s, 25s... max 30s
+      const delay = Math.min(baseDelay * attempt, 30000);
+      console.log(`⏳ Retrying MongoDB connection in ${delay/1000}s...`);
+      setTimeout(() => connectWithRetry(attempt + 1), delay);
+    } else {
+      console.error("🚫 MongoDB connection failed after maximum retries. Running in DEMO/MEMORY mode.");
+    }
+  }
+};
+
+// Start MongoDB connection
+if (process.env.MONGO_URI) {
+  connectWithRetry();
+} else {
+  console.warn("⚠️ No MONGO_URI provided. Running in DEMO/MEMORY mode.");
+}
 
 // ================= CORS =================
 
+// Dynamic CORS - allow all in production, localhost in dev
+const isProduction = process.env.NODE_ENV === "production";
+const corsOrigin = isProduction 
+  ? true  // Allow all origins in production
+  : (process.env.CLIENT_URL || "http://localhost:5173");
+
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
-  credentials: true
+  origin: corsOrigin,
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
 // Cookie parser for auth
 app.use(cookieParser());
-
 
 // ================= BODY PARSER =================
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
+// ================= HEALTH CHECK =================
 
-// ================= MONGODB =================
-
-mongoose.connect(process.env.MONGO_URI)
-.then(() => console.log("MongoDB connected"))
-.catch(err => console.error("MongoDB connection error:", err));
-
+app.get("/api/health", (req, res) => {
+  res.json({
+    status: "ok",
+    mongodb: isMongoConnected ? "connected" : "disconnected (demo mode)",
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ================= MEMORY FALLBACK =================
 
@@ -295,152 +361,95 @@ function sanitizeApp(body) {
 
 // ================= CRUD APIs =================
 
+// Helper to check MongoDB connection status
+const isDbReady = () => isMongoConnected && mongoose.connection.readyState === 1;
 
 // GET
-
 app.get("/api/apps", async (req, res) => {
-
   try {
-
-    if (mongoose.connection.readyState === 1) {
-
+    if (isDbReady()) {
       const apps = await AppMetric.find();
-
       return res.json(apps);
-
     }
-
-  } catch {}
-
+  } catch (err) {
+    console.warn("MongoDB GET /api/apps error:", err.message);
+  }
+  // Fallback to memory store
   res.json(memoryStore);
-
 });
-
 
 // POST
-
 app.post("/api/apps", async (req, res) => {
-
   const payload = sanitizeApp(req.body);
-
   try {
-
-    if (mongoose.connection.readyState === 1) {
-
+    if (isDbReady()) {
       const appData = new AppMetric({
-
         ...payload,
-
         lastUpdated: new Date()
-
       });
-
       await appData.save();
-
       return res.status(201).json(appData);
-
     }
-
-  } catch {}
-
+  } catch (err) {
+    console.warn("MongoDB POST /api/apps error:", err.message);
+  }
+  // Fallback to memory store
   const newItem = {
-
     _id: `mem_${memoryIdCounter++}`,
-
     ...payload,
-
     lastUpdated: new Date()
-
   };
-
   memoryStore.push(newItem);
-
   res.status(201).json(newItem);
-
 });
-
 
 // PUT
-
 app.put("/api/apps/:id", async (req, res) => {
-
   const id = req.params.id;
-
   const payload = sanitizeApp(req.body);
-
   try {
-
-    if (mongoose.connection.readyState === 1 && !id.startsWith("mem_")) {
-
+    if (isDbReady() && !id.startsWith("mem_")) {
       const updated = await AppMetric.findByIdAndUpdate(
-
         id,
-
         { ...payload, lastUpdated: new Date() },
-
         { new: true }
-
       );
-
       if (updated) return res.json(updated);
-
     }
-
-  } catch {}
-
-  const index = memoryStore.findIndex(x => x._id == id);
-
-  if (index >= 0) {
-
-    memoryStore[index] = {
-
-      ...memoryStore[index],
-
-      ...payload,
-
-      lastUpdated: new Date()
-
-    };
-
-    return res.json(memoryStore[index]);
-
+  } catch (err) {
+    console.warn("MongoDB PUT /api/apps error:", err.message);
   }
-
+  // Fallback to memory store
+  const index = memoryStore.findIndex(x => x._id == id);
+  if (index >= 0) {
+    memoryStore[index] = {
+      ...memoryStore[index],
+      ...payload,
+      lastUpdated: new Date()
+    };
+    return res.json(memoryStore[index]);
+  }
   res.status(404).json({ error: "Not found" });
-
 });
 
-
 // DELETE
-
 app.delete("/api/apps/:id", async (req, res) => {
-
   const id = req.params.id;
-
   try {
-
-    if (mongoose.connection.readyState === 1) {
-
+    if (isDbReady() && !id.startsWith("mem_")) {
       await AppMetric.findByIdAndDelete(id);
-
       return res.json({ message: "Deleted" });
-
     }
-
-  } catch {}
-
-  const index = memoryStore.findIndex(x => x._id == id);
-
-  if (index >= 0) {
-
-    memoryStore.splice(index, 1);
-
-    return res.json({ message: "Deleted" });
-
+  } catch (err) {
+    console.warn("MongoDB DELETE /api/apps error:", err.message);
   }
-
+  // Fallback to memory store
+  const index = memoryStore.findIndex(x => x._id == id);
+  if (index >= 0) {
+    memoryStore.splice(index, 1);
+    return res.json({ message: "Deleted" });
+  }
   res.status(404).json({ error: "Not found" });
-
 });
 
 

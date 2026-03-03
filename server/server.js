@@ -863,7 +863,7 @@ app.use(
     origin: isProduction ? true : ["http://localhost:5173", "http://localhost:5174"],
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-session-id"],
   })
 );
 
@@ -991,9 +991,15 @@ if (clientDistPath) {
 
 // ─────────────────────────────────────────────
 // Start server
-// ─────────────────────────────────────────────
+// // ─────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+// app.listen(PORT, () => {
+//   console.log(`🚀 Server running on port ${PORT}`);
+//   console.log(`Environment: ${isProduction ? "production" : "development"}`);
+// });
+
+// IMPORTANT: use 0.0.0.0 for Railway
+app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`Environment: ${isProduction ? "production" : "development"}`);
 });
