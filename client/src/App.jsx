@@ -160,6 +160,7 @@ import OfferLetterGenerator from "./pages/OfferLetterGenerator";
 import HRPolicyBuilder from "./pages/HRPolicyBuilder";
 import ExitInterviewAnalyzer from "./pages/ExitInterviewAnalyzer";
 import ExitInterviewGenerator from "./pages/ExitInterviewGenerator";
+import ResumeLite from "./pages/ResumeLite";
 import { microApps } from "./data/microApps";
 
 const resumeScreenerApp = microApps.find((a) => a.id === "resume-screener");
@@ -170,6 +171,7 @@ const offerLetterApp = microApps.find((a) => a.id === "offer-letter");
 const policyBuilderApp = microApps.find((a) => a.id === "policy-builder");
 const exitInterviewApp = microApps.find((a) => a.id === "exit-interview");
 const exitInterviewGeneratorApp = microApps.find((a) => a.id === "exit-interview-generator");
+const resumeLiteApp = { id: "resume-lite", name: "ResumeLite", valueProposition: "AI-Powered Multiple Resume Analysis & Scoring", pricing: "Powered by Groq AI", icon: "📊" };
 
 const isPro = false;
 
@@ -247,6 +249,7 @@ function App() {
           <Route path="apps/exit-interview" element={<ExitInterviewPage isPro={isPro} />} />
           <Route path="apps/attendance-tracker" element={<AttendanceTrackerPage isPro={isPro} />} />
           <Route path="apps/resume-formatter" element={<ResumeFormatterPage isPro={isPro} />} />
+          <Route path="apps/resume-lite" element={<ResumeLite app={resumeLiteApp} />} />
           <Route path="apps/:appId" element={<MicroApp isPro={isPro} />} />
           <Route path="*" element={<Navigate to="/admin" replace />} />
         </Route>

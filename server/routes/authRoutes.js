@@ -9,6 +9,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "atract-super-secret-key-change-in-
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 const COOKIE_NAME = process.env.COOKIE_NAME || "atract_token";
 
+// Check if MongoDB is connected
+const isDbReady = () => mongoose.connection.readyState === 1;
+
 // Cookie options for HTTP-only secure cookies
 const cookieOptions = {
   httpOnly: true,

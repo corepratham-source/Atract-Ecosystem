@@ -14,6 +14,7 @@ import FollowUpTrackerPage from "./FollowUpTracker";
 import ExitInterviewPage from "./ExitInterview";
 import AttendanceTrackerPage from "./AttendanceTracker";
 import ResumeFormatterPage from "./ResumeFormatter";
+import ResumeLite from "./ResumeLite";
 import MicroApp from "./MicroApp";
 
 const isPro = false;
@@ -22,6 +23,7 @@ const appById = (id) => microApps.find((a) => a.id === id);
 
 const CUSTOMER_APP_MAP = {
   "resume-screener-lite": { app: () => appById("resume-screener"), Component: ResumeScreenerLitePage },
+  "resume-lite": { app: () => ({ id: "resume-lite", name: "ResumeLite", valueProposition: "AI-Powered Multiple Resume Analysis & Scoring", pricing: "Powered by Groq AI", icon: "📊" }), Component: ResumeLite },
   "interview-questions": { app: () => appById("interview-questions"), Component: InterviewQuestionGenerator },
   "salary-benchmark": { app: () => appById("salary-benchmark"), Component: SalaryBenchmarkTool },
   "performance-review": { app: () => appById("performance-review"), Component: PerformanceReviewAnalyzer },

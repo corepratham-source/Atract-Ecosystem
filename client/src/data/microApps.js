@@ -9,7 +9,7 @@ export const microApps = [
     category: "HR-Tech",
     icon: "📋"
   },
-  {
+{
     id: "interview-questions",
     name: "Interview Question Generator",
     valueProposition: "Role-based question generation for interviews",

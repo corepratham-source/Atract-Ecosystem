@@ -209,12 +209,23 @@
 // });
 
 
-require("dotenv").config();
+const path = require("path");
+
+// Load the environment variables from server/.env explicitly. This is
+// important when the app is started from the workspace root, not the server folder.
+const envFilePath = path.resolve(__dirname, ".env");
+const dotenvResult = require("dotenv").config({ path: envFilePath });
+if (dotenvResult.error) {
+  console.warn(`⚠️  Could not load .env from ${envFilePath}.`, dotenvResult.error.message || dotenvResult.error);
+} else {
+  console.log(`✅ Loaded environment variables from ${envFilePath}`);
+}
+
 const express = require("express");
 const mongoose = require("mongoose");
+const dns = require("dns");
 const cors = require("cors");
 const cookieParser = require("cookie-parser");
-const path = require("path");
 const fs = require("fs");
 
 const AppMetric = require("./models/appmetric");
@@ -247,6 +258,15 @@ const mongoOptions = {
 
 mongoose.set("strictQuery", false);
 
+// Force using public resolvers for SRV DNS every time to avoid local resolver DNS/SRV restrictions.
+// This fixes querySrv ECONNREFUSED when local DNS blocks _mongodb._tcp.* SRV records.
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+  console.log("📡 MongoDB DNS resolver set to Google (8.8.8.8) / Cloudflare (1.1.1.1)");
+} catch (dnsErr) {
+  console.warn("⚠️ Could not set custom DNS servers:", dnsErr.message || dnsErr);
+}
+
 // Disable query buffering - queries won't queue when disconnected
 mongoose.set("bufferCommands", false);
 
@@ -273,21 +293,31 @@ mongoose.connection.on("close", () => {
   console.log("🔌 MongoDB: Connection closed");
 });
 
+let currentMongoUri = process.env.MONGO_URI;
+const fallbackMongoUri = process.env.MONGO_URI_FALLBACK || process.env.MONGO_URI_MONGODB;
+
 const connectWithRetry = async (attempt = 1) => {
   const maxRetries = 10;
   const baseDelay = 5000; // 5 seconds
-  
+
   try {
-    console.log(`MongoDB connection attempt #${attempt}...`);
-    await mongoose.connect(process.env.MONGO_URI, mongoOptions);
+    console.log(`MongoDB connection attempt #${attempt} using URI type: ${currentMongoUri?.startsWith('mongodb+srv') ? 'mongodb+srv' : 'mongodb'}`);
+    await mongoose.connect(currentMongoUri, mongoOptions);
     console.log("✅ MongoDB connected successfully!");
     isMongoConnected = true;
   } catch (err) {
     isMongoConnected = false;
     console.error(`❌ MongoDB connection attempt #${attempt} failed:`, err.message);
-    
+
+    // If SRV lookup fails and fallback is supplied, switch to explicit URI
+    if (err.message?.includes("querySrv ECONNREFUSED") && currentMongoUri?.startsWith("mongodb+srv") && fallbackMongoUri) {
+      console.warn("⚠️ MongoDB SRV lookup failed; switching to fallback non-SRV URI (MONGO_URI_FALLBACK)");
+      currentMongoUri = fallbackMongoUri;
+      setTimeout(() => connectWithRetry(1), 1000);
+      return;
+    }
+
     if (attempt < maxRetries) {
-      // Exponential backoff: 5s, 10s, 15s, 20s, 25s... max 30s
       const delay = Math.min(baseDelay * attempt, 30000);
       console.log(`⏳ Retrying MongoDB connection in ${delay/1000}s...`);
       setTimeout(() => connectWithRetry(attempt + 1), delay);
@@ -319,7 +349,7 @@ app.use(cors({
   origin: corsOrigin,
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+    allowedHeaders: ["Content-Type", "Authorization", "x-session-id"]
 }));
 
 // Cookie parser for auth

@@ -283,6 +283,8 @@
 
 // module.exports = { matchResumeToJD, scoreResumeVsJD, completeWithGroq, getGroqClient, MODEL_FALLBACK_CHAIN };
 
+require("dotenv").config();
+
 const Groq = require("groq-sdk");
 
 const LLM_ENABLED = String(process.env.MATCHING_LLM_ENABLED || "true").toLowerCase() === "true";
@@ -562,9 +564,9 @@ async function completeWithGroq(prompt, systemMessage, options = {}) {
   for (const model of MODEL_FALLBACK_CHAIN) {
     try {
       const c = await g.chat.completions.create({
-        model, temperature: options.temperature ?? 0.3,
-        max_completion_tokens: options.max_tokens ?? 600,
-        messages: [{ role: "system", content: systemMessage }, { role: "user", content: prompt }],
+        model, temperature: options.temperature ?? 0.5,
+        max_completion_tokens: options.max_tokens ?? 1500,
+        messages: [{ role: "system", content: systemMessage || "You are a helpful assistant." }, { role: "user", content: prompt }],
       });
       const content = c?.choices?.[0]?.message?.content;
       if (content?.trim()) return String(content);

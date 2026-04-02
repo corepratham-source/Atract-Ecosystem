@@ -158,6 +158,9 @@ async function generateWithGroq(role, level) {
 }
 
 function parseQuestions(text) {
+  if (!text) return [];
+
+  // Try JSON array first
   try {
     let cleaned = text
       .replace(/```json/gi, "")
@@ -166,20 +169,56 @@ function parseQuestions(text) {
 
     const parsed = JSON.parse(cleaned);
     if (Array.isArray(parsed)) {
-      return parsed
-        .filter(q => typeof q === "string" && q.trim().length > 20 && q.trim().endsWith("?"))
-        .map(q => q.trim())
-        .slice(0, 8);
+      const unique = [...new Set(parsed)]
+        .filter(q => typeof q === "string" && q.trim().length > 15)
+        .map(q => q.trim());
+      if (unique.length >= 4) return unique.slice(0, 8);
     }
-  } catch (e) {
-    // Fallback line parser (still from Groq output)
-    return text
-      .split(/\n+/)
-      .map(l => l.replace(/^\s*[\d\.\-\*•]+\s*/, "").trim())
-      .filter(l => l.length > 30 && l.endsWith("?"))
-      .slice(0, 8);
+  } catch (e) {}
+
+  // Fallback: extract lines that look like questions
+  const lines = text
+    .split(/\n+/)
+    .map(l => l.replace(/^\s*[\d\.\-\*•]+\s*/, "").replace(/^["']|["']$/g, "").trim())
+    .filter(l => l.length > 20 && (
+      l.endsWith("?") ||
+      l.toLowerCase().includes("tell me") ||
+      l.toLowerCase().includes("describe") ||
+      l.toLowerCase().includes("how would") ||
+      l.toLowerCase().includes("what would") ||
+      l.toLowerCase().includes("how do you")
+    ));
+
+  return [...new Set(lines)].slice(0, 8);
+}
+
+function getFallbackQuestions(role, level) {
+  const r = role.toLowerCase();
+  const isTechnical = ["developer", "engineer", "architect", "devops", "data", "analyst", "designer", "qa", "tester", "security", "ml", "ai", "frontend", "backend", "fullstack", "full stack", "software", "programmer", "coder"].some(k => r.includes(k));
+
+  if (isTechnical) {
+    return [
+      `Tell me about a time you debugged a particularly challenging production issue as a ${role}.`,
+      `Describe a situation where you had to refactor legacy code. How did you approach it?`,
+      `How would you design a system to handle 10x the current traffic for your ${role} work?`,
+      `Tell me about a time you disagreed with a technical decision. How was it resolved?`,
+      `What is your approach to code reviews and ensuring code quality as a ${role}?`,
+      `Describe how you would onboard a new team member to your current codebase.`,
+      `Tell me about a time you had to learn a new technology quickly for a project.`,
+      `How do you balance technical debt with new feature development?`,
+    ];
   }
-  return [];
+
+  return [
+    `Tell me about a time you led a project from conception to delivery as a ${role}.`,
+    `Describe a situation where you had to manage conflicting stakeholder priorities.`,
+    `How would you approach your first 90 days in this ${role} position?`,
+    `Tell me about a time you had to make a difficult decision with limited information.`,
+    `What strategies do you use to keep your team motivated during challenging periods?`,
+    `Describe how you handle feedback from peers or managers that you disagree with.`,
+    `Tell me about a time you identified and solved a problem before it became critical.`,
+    `How do you measure success in your role as a ${role}?`,
+  ];
 }
 
 router.post("/generate-questions", async (req, res) => {
@@ -194,25 +233,46 @@ router.post("/generate-questions", async (req, res) => {
     const validLevels = ["Junior", "Mid", "Senior"];
     level = validLevels.includes(level) ? level : "Mid";
 
-    const questions = await generateWithGroq(role, level);
+    console.log(`[Interview] Generating questions for ${level} ${role}`);
 
-    if (questions.length < 6) {
-      return res.status(503).json({ 
-        error: "Groq did not return enough unique questions. Please try again." 
-      });
+    let questions = [];
+    try {
+      questions = await generateWithGroq(role, level);
+      console.log(`[Interview] Groq returned ${questions.length} questions`);
+    } catch (apiError) {
+      console.error("[Interview] Groq API error:", apiError.message);
+    }
+
+    // If Groq returned some but not enough, pad with fallback
+    if (questions.length > 0 && questions.length < 6) {
+      const fallback = getFallbackQuestions(role, level);
+      const existing = new Set(questions.map(q => q.toLowerCase()));
+      for (const fb of fallback) {
+        if (questions.length >= 8) break;
+        if (!existing.has(fb.toLowerCase())) {
+          questions.push(fb);
+        }
+      }
+      console.log(`[Interview] Padded to ${questions.length} questions with fallback`);
+    }
+
+    // If Groq completely failed, use all fallback
+    if (questions.length < 4) {
+      console.log("[Interview] Using fallback questions");
+      questions = getFallbackQuestions(role, level);
     }
 
     res.json({
       success: true,
-      questions,
+      questions: questions.slice(0, 8),
       role,
       level,
-      count: questions.length,
+      count: Math.min(questions.length, 8),
       generatedAt: new Date().toISOString()
     });
   } catch (err) {
     console.error("Interview questions error:", err);
-    res.status(500).json({ error: "Server error. Check Groq API key and utils/groq.js" });
+    res.status(500).json({ error: "Server error generating questions" });
   }
 });
 
