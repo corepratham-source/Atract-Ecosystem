@@ -24,7 +24,7 @@ export default {
         '80': '20rem',
         '88': '22rem',
       },
-      // Custom colors
+      // Custom colors - CORE Brand
       colors: {
         primary: {
           50: '#eef2ff',
@@ -37,6 +37,12 @@ export default {
           700: '#4338ca',
           800: '#3730a3',
           900: '#312e81',
+        },
+        core: {
+          red: '#E53935',
+          dark: '#4A4A4A',
+          light: '#9E9E9E',
+          bg: '#F5F5F5',
         }
       },
       // Custom font sizes

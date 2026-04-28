@@ -1,0 +1,11 @@
+/* CORE Brand Colors - Base Variables */
+
+:root {
+  --core-primary-red: #E53935;
+  --core-hover-red: #C62828;
+  --core-dark-grey: #4A4A4A;
+  --core-medium-grey: #9E9E9E;
+  --core-light-grey: #E0E0E0;
+  --core-background-grey: #F5F5F5;
+  --core-white: #FFFFFF;
+}

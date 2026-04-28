@@ -41,17 +41,17 @@ export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
       <section className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 sm:p-8">
         <div className="flex flex-col lg:flex-row gap-6 lg:items-center lg:justify-between">
           <div>
-            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight text-slate-900">
-              ATRact builds focused tools for professionals
+            <h2 className="text-xl sm:text-2xl font-semibold tracking-tight" style={{ color: '#4A4A4A' }}>
+              CORE builds focused tools for professionals
             </h2>
-            <p className="mt-2 text-sm sm:text-base text-slate-600 max-w-2xl">
+            <p className="mt-2 text-sm sm:text-base" style={{ color: '#9E9E9E' }}>
               Each micro-app solves one specific pain point extremely well. No large platforms. No complex workflows.
             </p>
           </div>
           {onNavigateToDashboard ? (
             <button
               onClick={onNavigateToDashboard}
-              className="px-4 py-2 text-sm font-semibold bg-slate-900 text-white rounded-xl hover:bg-slate-800"
+              className="px-4 py-2 text-sm font-semibold bg-red-500 text-white rounded-xl hover:bg-red-600"
             >
               Open Control Tower
             </button>
@@ -61,7 +61,7 @@ export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
 
       {/* All Apps Section - Combined */}
       <section>
-        <h3 className="text-base sm:text-lg font-semibold text-slate-900 mb-4">All Apps</h3>
+        <h3 className="text-base sm:text-lg font-semibold mb-4" style={{ color: '#4A4A4A' }}>All Apps</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
           {allApps.map((app, index) => (
             <AppCard 
@@ -81,23 +81,23 @@ export default function EcosystemHub({ onNavigateToDashboard, onAppUsed }) {
 function AppCard({ app, onOpen, getStatusBadge, index }) {
   return (
     <div 
-      className="group relative bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-blue-400 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2"
+      className="group relative bg-white rounded-2xl border border-slate-200 overflow-hidden hover:border-red-400 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2"
       style={{
         animationDelay: `${index * 50}ms`,
       }}
     >
       {/* Gradient overlay on hover */}
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-purple-50 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+      <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-red-100 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
       
       {/* Content */}
       <div className="relative p-5 sm:p-6">
         <div className="flex items-start justify-between mb-3 gap-2">
           {/* Icon */}
-          <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
+          <div className="w-10 h-10 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:scale-110 transition-transform duration-300">
             <span className="text-xl">{app.icon || '📱'}</span>
           </div>
           
-          <h4 className="text-base sm:text-lg font-bold text-slate-900 flex-1 group-hover:text-blue-600 transition-colors duration-300 ml-2">
+          <h4 className="text-base sm:text-lg font-bold flex-1 group-hover:text-red-600 transition-colors duration-300 ml-2" style={{ color: '#4A4A4A' }}>
             {app.name}
           </h4>
           <span className={`px-2 py-1 text-xs font-semibold rounded-lg border flex-shrink-0 ${getStatusBadge(app.status)} group-hover:scale-105 transition-transform duration-300`}>
@@ -105,15 +105,15 @@ function AppCard({ app, onOpen, getStatusBadge, index }) {
           </span>
         </div>
         
-        <p className="text-sm text-slate-600 mb-4 min-h-[40px] group-hover:text-slate-700 transition-colors duration-300">
+        <p className="text-sm mb-4 min-h-[40px] group-hover:text-slate-700 transition-colors duration-300" style={{ color: '#9E9E9E' }}>
           {app.valueProposition}
         </p>
         
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-          <span className="text-xs text-slate-500 font-medium group-hover:text-blue-600 transition-colors duration-300">{app.pricing}</span>
+          <span className="text-xs font-medium group-hover:text-red-600 transition-colors duration-300" style={{ color: '#9E9E9E' }}>{app.pricing}</span>
           <button
             onClick={() => onOpen(app.id)}
-            className="w-full sm:w-auto px-4 py-2 bg-gradient-to-r from-slate-800 to-slate-900 text-white text-sm font-semibold rounded-xl hover:from-slate-700 hover:to-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:ring-offset-2 transition-all duration-300 group-hover:shadow-lg transform group-hover:scale-105"
+            className="w-full sm:w-auto px-4 py-2 bg-red-500 text-white text-sm font-semibold rounded-xl hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-red-300 focus:ring-offset-2 transition-all duration-300 group-hover:shadow-lg transform group-hover:scale-105"
           >
             Open App →
           </button>
@@ -121,7 +121,7 @@ function AppCard({ app, onOpen, getStatusBadge, index }) {
       </div>
       
       {/* Bottom accent line */}
-      <div className="h-1 bg-gradient-to-r from-blue-500 to-purple-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
+      <div className="h-1 bg-red-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300 origin-left"></div>
     </div>
   );
 }
